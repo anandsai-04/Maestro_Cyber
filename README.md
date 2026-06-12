@@ -27,6 +27,37 @@ python starter_code/02_use_case_2_bi_simulation.py
 
 If all three scripts run without errors and produce printed summaries, your environment is correctly set up.
 
+## Cyber Pricing Feature Pipeline
+
+The current pricing workflow lives in the first EDA file and creates a modeling dataset, pruned feature table, EDA dashboard, and first-pass pure premium indications.
+
+```bash
+python code/01_use_case_1_eda.py
+```
+
+In VS Code, you can also run the default build task:
+
+```text
+Terminal > Run Build Task > Cyber Pricing: Full EDA Pipeline
+```
+
+Key outputs:
+
+- `data/09_cyber_pricing_features.csv`
+- `data/09_feature_dictionary.csv`
+- `outputs/eda_visuals/cyber_pricing_eda_dashboard.html`
+- `outputs/model_outputs/pure_premium_indications.csv`
+- `outputs/model_outputs/model_diagnostics.txt`
+
+The first model template uses:
+
+```text
+Pure Premium = Expected Claim Frequency * Expected Claim Severity
+Technical Premium = Pure Premium / (1 - total_load)
+```
+
+See `docs/cyber_pricing_feature_engineering_plan.md` for the merged features and variable exclusions.
+
 ## Repository Layout
 
 ```
