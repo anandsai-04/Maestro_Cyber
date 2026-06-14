@@ -4,7 +4,7 @@ import streamlit.components.v1 as components
 from pathlib import Path
 
 # Setup Paths
-BASE_DIR = Path(__file__).resolve().parent.parent
+BASE_DIR = Path(__file__).resolve().parent
 OUTPUTS_DIR = BASE_DIR / "outputs"
 EDA_DIR = OUTPUTS_DIR / "eda_visuals"
 MODEL_DIR = OUTPUTS_DIR / "model_outputs"
