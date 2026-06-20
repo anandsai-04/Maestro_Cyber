@@ -140,7 +140,9 @@ with tab_calc:
         n_findings = st.slider("Total Regulatory Findings", min_value=0, max_value=10, value=2)
         n_high = st.slider("High Severity Findings", min_value=0, max_value=n_findings, value=0)
         n_med = st.slider("Medium Severity Findings", min_value=0, max_value=n_findings-n_high if n_findings-n_high > 0 else 0, value=0)
-        nlp_prob = st.slider("DistilBERT NLP High-Sev Probability", min_value=0.0, max_value=1.0, value=0.1, step=0.05)
+        
+        st.info("🤖 **NLP Note:** DistilBERT automatically extracts the severity probability from unstructured text (baseline 10% applied).")
+        nlp_prob = 0.10
 
     # Transform Raw Inputs to Engineered Features
     exp_size = np.log1p(revenue) / 15.0 # Rough scaling
@@ -162,11 +164,28 @@ with tab_calc:
     reg_pressure = np.log1p(n_findings) * (1.0 + high_sev_rate + nlp_prob) * (1.0 + 0.25 * med_sev_rate)
     
     st.markdown("### 📊 Live Engineered Feature Calculations")
-    st.write("These scores are dynamically calculated from your raw inputs and fed directly into the Random Forest AI.")
+    st.write("These merged features are mathematically derived from your raw inputs above and fed directly into the Random Forest AI.")
+    
     e_col1, e_col2, e_col3 = st.columns(3)
-    e_col1.metric("Calculated Cyber Control Score", f"{cyber_control_score:.2f} / 1.0", help="Merged from NIST, MFA, EDR, and SOC")
-    e_col2.metric("Calculated Vendor Risk Pressure", f"{vendor_pressure:.1f}", help="Vendors divided by NIST score")
-    e_col3.metric("Calculated Regulatory Pressure", f"{reg_pressure:.2f}", help="Merged finding counts with AI severity probability")
+    
+    with e_col1:
+        st.markdown("**Cyber Control Score** (Merged NIST, MFA, EDR, SOC)")
+        st.progress(cyber_control_score)
+        st.caption(f"Score: {cyber_control_score:.2f} / 1.00")
+        
+    with e_col2:
+        st.markdown("**Vendor Risk Pressure** (Vendors / NIST)")
+        # Normalize for progress bar display (max expected around 50)
+        norm_vendor = min(vendor_pressure / 50.0, 1.0)
+        st.progress(norm_vendor)
+        st.caption(f"Score: {vendor_pressure:.1f}")
+        
+    with e_col3:
+        st.markdown("**Regulatory Pressure** (Findings + NLP AI)")
+        # Normalize for progress bar display (max expected around 20)
+        norm_reg = min(reg_pressure / 20.0, 1.0)
+        st.progress(norm_reg)
+        st.caption(f"Score: {reg_pressure:.2f}")
     
     input_dict = {
         "exposure_size_score": exp_size,
