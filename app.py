@@ -217,7 +217,7 @@ with tab_features:
         st.subheader("2. Vendor Control Pressure vs Total Loss")
         st.info("**What is this?** We divided `Number of Vendors` by the `NIST Maturity` to create a ratio indicating Third-Party Supply Chain Risk.")
         fig_v = px.scatter(df, x="vendor_control_pressure", y="total_loss", color="sub_sector", 
-                           log_y=True, trendline="ols",
+                           log_y=True,
                            labels={"vendor_control_pressure": "Vendor Risk Pressure Score", "total_loss": "Historical Claim Loss ($)"})
         st.plotly_chart(fig_v, use_container_width=True)
 
