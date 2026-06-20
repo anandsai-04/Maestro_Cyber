@@ -42,7 +42,7 @@ policy_input = pd.Series({
 # ============================================================
 # Tabs
 # ============================================================
-tab_calc, tab_viz = st.tabs(["🧮 Interactive Pricing Calculator", "📈 System Distributions (GMM)"])
+tab_calc, tab_viz, tab_ai = st.tabs(["🧮 Interactive Pricing Calculator", "📈 System Distributions (GMM)", "🤖 AI Explainer"])
 
 # ------------------------------------------------------------
 # Tab 1: Interactive Pricing Calculator
@@ -73,8 +73,10 @@ with tab_calc:
             st.metric("Final Technical Premium", f"${metrics['technical_premium']:,.0f}", 
                       help=f"(Pure Premium + Risk Load) / (1 - {expense_ratio*100}% Expense Ratio)")
             
-            # Save for viz
+            # Save for viz and AI
             st.session_state["sim_losses"] = sim_losses
+            st.session_state["metrics"] = metrics
+            st.session_state["policy_input"] = policy_input
 
     with col2:
         st.subheader("Loss Distribution Tail Risk")
@@ -165,3 +167,58 @@ with tab_viz:
             
     except NameError:
         st.warning("GMM Models not loaded. Please ensure simulation script ran successfully.")
+
+# ------------------------------------------------------------
+# Tab 3: AI Explainer
+# ------------------------------------------------------------
+with tab_ai:
+    st.subheader("🤖 Actuarial AI Explainer")
+    st.write("Generate a plain-English explanation of why the calculated premium is high or low based on the exact simulation metrics and the policyholder's risk profile.")
+    
+    api_key = st.text_input("Enter your Gemini API Key:", type="password", help="Get a free key from Google AI Studio")
+    
+    if st.button("Generate Actuarial Explanation", type="primary"):
+        if "metrics" not in st.session_state:
+            st.warning("Please run the Monte Carlo simulation first in Tab 1!")
+        elif not api_key:
+            st.error("Please enter a Gemini API Key to generate the explanation.")
+        else:
+            with st.spinner("Analyzing simulation metrics..."):
+                try:
+                    from google import genai
+                    client = genai.Client(api_key=api_key)
+                    
+                    metrics = st.session_state["metrics"]
+                    inputs = st.session_state["policy_input"]
+                    
+                    prompt = f"""
+                    You are an expert Cyber Actuary. Explain to a non-technical underwriter why this policy's Business Interruption premium is what it is.
+                    
+                    Here are the inputs:
+                    - Revenue: ${inputs['revenue_mm']} Million
+                    - NIST Maturity Score: {inputs['control_maturity_nist']}/5
+                    - Primary Regulator: {inputs['primary_regulator']}
+                    
+                    Here are the simulation outputs (based on 50,000 Monte Carlo years):
+                    - Expected Average Loss (Pure Premium): ${metrics['expected_loss']:,.0f}
+                    - TVaR 99% (Worst 1% of simulated years): ${metrics['tvar_99']:,.0f}
+                    - Risk Load (Cost to hold reserve capital): ${metrics['risk_load_dollars']:,.0f}
+                    - Final Technical Premium: ${metrics['technical_premium']:,.0f}
+                    
+                    Focus your explanation on HOW the inputs (especially the NIST maturity and regulator) influenced the TVaR 99% tail risk, and why the Risk Load is causing the final premium to be much higher than just the "average" expected loss.
+                    Be concise, professional, and act as an actuarial co-pilot.
+                    """
+                    
+                    response = client.models.generate_content(
+                        model='gemini-2.5-flash',
+                        contents=prompt,
+                    )
+                    
+                    st.success("Analysis Complete")
+                    st.markdown("### AI Actuarial Assessment")
+                    st.write(response.text)
+                    
+                except ImportError:
+                    st.error("The `google-genai` library is not installed. Please run `pip install google-genai`.")
+                except Exception as e:
+                    st.error(f"Error generating explanation: {e}")
