@@ -123,29 +123,57 @@ with tab_calc:
         revenue = st.slider("Revenue ($M)", min_value=10, max_value=50000, value=500)
         
     with col_in2:
-        st.subheader("Controls & Tech")
-        nist_mfa_score = st.slider("Cyber Control Maturity (NIST, MFA, EDR)", min_value=0.0, max_value=1.0, value=0.6, step=0.05)
-        vendor_pressure = st.slider("Vendor Network Risk Pressure", min_value=0.0, max_value=50.0, value=10.0, step=1.0)
+        st.subheader("Controls & Security")
+        nist = st.slider("NIST Control Maturity", min_value=1.0, max_value=5.0, value=3.0, step=0.1)
+        mfa = st.slider("MFA Coverage %", min_value=0, max_value=100, value=50, step=5)
+        edr = st.checkbox("EDR Deployed", value=True)
+        soc = st.checkbox("24/7 SOC", value=False)
+        n_vendors = st.slider("Number of 3rd Party Vendors", min_value=0, max_value=150, value=30)
         hybrid_flag = 1 if cloud_provider == "Hybrid" else 0
         
     with col_in3:
         st.subheader("Operations & Regulatory")
         has_trading = st.checkbox("Has Trading Desk", value=False)
         processes_payments = st.checkbox("Processes Payments", value=True)
-        nlp_findings = st.slider("NLP Extracted Regulatory Risk (DistilBERT Score)", min_value=0.0, max_value=20.0, value=2.0, step=0.5)
+        
+        st.markdown("**Regulatory Audit History**")
+        n_findings = st.slider("Total Regulatory Findings", min_value=0, max_value=10, value=2)
+        n_high = st.slider("High Severity Findings", min_value=0, max_value=n_findings, value=0)
+        n_med = st.slider("Medium Severity Findings", min_value=0, max_value=n_findings-n_high if n_findings-n_high > 0 else 0, value=0)
+        nlp_prob = st.slider("DistilBERT NLP High-Sev Probability", min_value=0.0, max_value=1.0, value=0.1, step=0.05)
 
-    # Transform Inputs to Engineered Features
+    # Transform Raw Inputs to Engineered Features
     exp_size = np.log1p(revenue) / 15.0 # Rough scaling
     crit_ops = int(has_trading) + int(processes_payments)
     pay_trad = 1 if (has_trading and processes_payments) else 0
-    control_gap = 1.0 - nist_mfa_score
+    
+    # 1. Cyber Control Score
+    nist_score = nist / 5.0
+    mfa_score = mfa / 100.0
+    cyber_control_score = (0.40 * nist_score) + (0.25 * mfa_score) + (0.20 * int(edr)) + (0.15 * int(soc))
+    control_gap = 1.0 - cyber_control_score
+    
+    # 2. Vendor Control Pressure
+    vendor_pressure = n_vendors / (nist + 0.1)
+    
+    # 3. Regulatory Findings Pressure
+    high_sev_rate = n_high / (n_findings + 1.0)
+    med_sev_rate = n_med / (n_findings + 1.0)
+    reg_pressure = np.log1p(n_findings) * (1.0 + high_sev_rate + nlp_prob) * (1.0 + 0.25 * med_sev_rate)
+    
+    st.markdown("### 📊 Live Engineered Feature Calculations")
+    st.write("These scores are dynamically calculated from your raw inputs and fed directly into the Random Forest AI.")
+    e_col1, e_col2, e_col3 = st.columns(3)
+    e_col1.metric("Calculated Cyber Control Score", f"{cyber_control_score:.2f} / 1.0", help="Merged from NIST, MFA, EDR, and SOC")
+    e_col2.metric("Calculated Vendor Risk Pressure", f"{vendor_pressure:.1f}", help="Vendors divided by NIST score")
+    e_col3.metric("Calculated Regulatory Pressure", f"{reg_pressure:.2f}", help="Merged finding counts with AI severity probability")
     
     input_dict = {
         "exposure_size_score": exp_size,
-        "cyber_control_score": nist_mfa_score,
+        "cyber_control_score": cyber_control_score,
         "control_gap_score": control_gap,
         "vendor_control_pressure": vendor_pressure,
-        "regulatory_findings_pressure": nlp_findings,
+        "regulatory_findings_pressure": reg_pressure,
         "critical_operations_score": crit_ops,
         "payment_trading_flag": pay_trad,
         "hybrid_cloud_flag": hybrid_flag
