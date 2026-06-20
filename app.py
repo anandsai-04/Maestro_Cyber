@@ -99,10 +99,9 @@ glm_auc = roc_auc_score(y_freq, df["glm_prob"])
 # ==========================================
 # TABS
 # ==========================================
-tab_calc, tab_features, tab_nlp, tab_models = st.tabs([
+tab_calc, tab_features, tab_models = st.tabs([
     "🧮 Interactive Pricing Engine", 
     "🧠 Engineered Features Analytics", 
-    "🤖 NLP Severity Findings",
     "📊 Model Comparison & Tail Risk"
 ])
 
@@ -269,27 +268,7 @@ with tab_features:
         st.plotly_chart(fig_v, use_container_width=True)
 
 # ------------------------------------------
-# TAB 3: NLP SEVERITY FINDINGS
-# ------------------------------------------
-with tab_nlp:
-    st.markdown("### Unstructured Text AI: DistilBERT Regulatory Findings")
-    st.write("""
-    Raw regulatory findings are unstructured text. We deployed a **DistilBERT** deep-learning transformer model to read every finding.
-    The model outputs an embedding and calculates the probability of the finding being "High Severity". 
-    
-    We then mathematically merged this NLP probability with the sheer count of findings to create the `regulatory_findings_pressure` feature.
-    """)
-    
-    st.subheader("Impact of AI NLP Risk on Financial Losses")
-    fig_nlp = px.scatter(df, x="regulatory_findings_pressure", y="total_loss", color="had_claim", 
-                         log_y=True,
-                         labels={"regulatory_findings_pressure": "DistilBERT Extracted Regulatory Risk Score", "total_loss": "Total Loss ($)"},
-                         color_continuous_scale="Reds")
-    st.plotly_chart(fig_nlp, use_container_width=True)
-
-
-# ------------------------------------------
-# TAB 4: MODEL COMPARISON & TAIL RISK
+# TAB 3: MODEL COMPARISON & TAIL RISK
 # ------------------------------------------
 with tab_models:
     m_col1, m_col2 = st.columns(2)
