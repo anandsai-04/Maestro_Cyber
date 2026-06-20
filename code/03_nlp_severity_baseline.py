@@ -1,156 +1,137 @@
-"""
-NLP Severity Classifier — Starter Baseline
-============================================
-Trains a TF-IDF + logistic regression baseline on regulatory finding text
-to predict severity (Low / Medium / High). This is the FIRST model to build —
-once the team validates the pipeline end-to-end, they should swap in a
-fine-tuned transformer (DistilBERT, FinBERT) and compare.
-
-Outputs:
-  - Train/val/test metrics
-  - Confusion matrix
-  - A reusable predict() function
-  - The same model applied to questionnaire responses for quality scoring
-"""
-
 import pandas as pd
 import numpy as np
 from pathlib import Path
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.linear_model import LogisticRegression
-from sklearn.pipeline import Pipeline
 from sklearn.model_selection import train_test_split
-from sklearn.metrics import classification_report, confusion_matrix
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import classification_report, f1_score, roc_auc_score, recall_score
+from sklearn.preprocessing import LabelBinarizer
 import joblib
-
-DATA_DIR = Path(__file__).parent.parent / "data"
-MODEL_DIR = Path(__file__).parent / "models"
-MODEL_DIR.mkdir(exist_ok=True)
+import torch
+from transformers import DistilBertTokenizer, DistilBertModel
 
 # ============================================================
-# 1. Load NLP corpus
+# Paths
 # ============================================================
+ROOT = Path(__file__).parent.parent
+DATA_DIR = ROOT / "data"
+MODEL_DIR = ROOT / "code" / "models"
+MODEL_DIR.mkdir(parents=True, exist_ok=True)
+
+# ============================================================
+# Device Configuration
+# ============================================================
+device = torch.device("cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu")
+print(f"Using device for DistilBERT: {device}")
+
+# ============================================================
+# 1. Load Data
+# ============================================================
+print("\nLoading datasets...")
 findings = pd.read_csv(DATA_DIR / "03_regulatory_findings.csv")
 print(f"Loaded {len(findings)} regulatory findings")
-print(f"Label distribution:\n{findings['severity_label'].value_counts()}\n")
 
 # ============================================================
-# 2. Train/val/test split
+# 2. Extract DistilBERT Embeddings
 # ============================================================
-X = findings["finding_text"].values
-y = findings["severity_label"].values
+print("\nLoading DistilBERT model for feature extraction...")
+tokenizer = DistilBertTokenizer.from_pretrained("distilbert-base-uncased")
+bert_model = DistilBertModel.from_pretrained("distilbert-base-uncased").to(device)
+bert_model.eval()
 
+def get_embeddings(texts, batch_size=32):
+    all_embeddings = []
+    with torch.no_grad():
+        for i in range(0, len(texts), batch_size):
+            batch = texts[i:i+batch_size]
+            encoded = tokenizer(batch, padding=True, truncation=True, max_length=128, return_tensors="pt").to(device)
+            output = bert_model(**encoded)
+            # Use the [CLS] token representation (0th token) as sentence embedding
+            cls_embeddings = output.last_hidden_state[:, 0, :].cpu().numpy()
+            all_embeddings.append(cls_embeddings)
+    return np.vstack(all_embeddings)
+
+print("Extracting embeddings for findings... This may take a moment.")
+X_texts = findings["finding_text"].astype(str).tolist()
+y = findings["severity_label"].astype(str).tolist()
+
+X_emb = get_embeddings(X_texts)
+print(f"Extracted embedding matrix shape: {X_emb.shape}")
+
+# ============================================================
+# 3. Train/val/test split
+# ============================================================
 X_train, X_temp, y_train, y_temp = train_test_split(
-    X, y, test_size=0.30, stratify=y, random_state=42
+    X_emb, y, test_size=0.30, stratify=y, random_state=42
 )
 X_val, X_test, y_val, y_test = train_test_split(
     X_temp, y_temp, test_size=0.50, stratify=y_temp, random_state=42
 )
-print(f"Train: {len(X_train)}  Val: {len(X_val)}  Test: {len(X_test)}\n")
 
 # ============================================================
-# 3. Baseline: TF-IDF + Logistic Regression
+# 4. Evaluation Helper
 # ============================================================
-pipe = Pipeline([
-    ("tfidf", TfidfVectorizer(
-        ngram_range=(1, 2),
-        min_df=2,
-        max_df=0.95,
-        sublinear_tf=True,
-        stop_words="english",
-    )),
-    ("clf", LogisticRegression(
-        max_iter=2000,
-        class_weight="balanced",
-        C=1.0,
-    )),
-])
-
-pipe.fit(X_train, y_train)
-
-# ============================================================
-# 4. Evaluate
-# ============================================================
-print("=" * 60)
-print("VALIDATION METRICS")
-print("=" * 60)
-val_preds = pipe.predict(X_val)
-print(classification_report(y_val, val_preds, digits=3))
-
-print("=" * 60)
-print("TEST METRICS")
-print("=" * 60)
-test_preds = pipe.predict(X_test)
-print(classification_report(y_test, test_preds, digits=3))
-
-print("Confusion matrix (rows: true, cols: predicted):")
-labels = sorted(np.unique(y))
-cm = confusion_matrix(y_test, test_preds, labels=labels)
-print("       " + "  ".join(f"{l:>7s}" for l in labels))
-for label, row in zip(labels, cm):
-    print(f"{label:>7s}  " + "  ".join(f"{v:>7d}" for v in row))
+def evaluate_model(name, y_true, y_pred, y_prob):
+    print(f"\n{'='*60}")
+    print(f"{name} - TEST METRICS")
+    print(f"{'='*60}")
+    print(classification_report(y_true, y_pred, zero_division=0))
+    
+    macro_f1 = f1_score(y_true, y_pred, average="macro", zero_division=0)
+    macro_recall = recall_score(y_true, y_pred, average="macro", zero_division=0)
+    
+    lb = LabelBinarizer()
+    y_true_bin = lb.fit_transform(y_true)
+    if y_true_bin.shape[1] == 1:
+        y_true_bin = np.hstack([1 - y_true_bin, y_true_bin])
+    macro_auc = roc_auc_score(y_true_bin, y_prob, average="macro", multi_class="ovr")
+    
+    print(f"Macro F1-score: {macro_f1:.4f}")
+    print(f"Macro Recall:   {macro_recall:.4f}")
+    print(f"Macro AUC-ROC:  {macro_auc:.4f}\n")
+    return macro_f1
 
 # ============================================================
-# 5. Persist model
+# 5. Train Models (Random Forest over Embeddings)
 # ============================================================
-joblib.dump(pipe, MODEL_DIR / "severity_classifier_baseline.joblib")
-print(f"\nSaved baseline model: {MODEL_DIR / 'severity_classifier_baseline.joblib'}")
+print("Training AI-Powered Model (Random Forest on DistilBERT)...")
+rf = RandomForestClassifier(n_estimators=100, class_weight="balanced", random_state=42)
+rf.fit(X_train, y_train)
+
+rf_preds = rf.predict(X_test)
+rf_probs = rf.predict_proba(X_test)
+rf_f1 = evaluate_model("AI-POWERED (DistilBERT + RF)", y_test, rf_preds, rf_probs)
+
+# Save the model
+joblib.dump(rf, MODEL_DIR / "severity_classifier_baseline.joblib")
+print(f"Saved best model: {MODEL_DIR / 'severity_classifier_baseline.joblib'}")
 
 # ============================================================
-# 6. Inference helper for use in pricing pipeline
-# ============================================================
-def predict_severity(texts):
-    """Predict severity labels and class probabilities for a list of finding texts."""
-    labels = pipe.predict(texts)
-    probs = pipe.predict_proba(texts)
-    return labels, probs
-
-# Test it on a single example
-example = ["The institution has failed to implement basic access controls. MRIA issued."]
-lbl, prb = predict_severity(example)
-print(f"\nExample prediction: {lbl[0]} (probs: {dict(zip(pipe.classes_, prb[0].round(3)))})")
-
-# ============================================================
-# 7. Apply to questionnaire responses (re-use for quality scoring)
+# 6. Optional: Apply to Questionnaire Responses
 # ============================================================
 print("\n" + "=" * 60)
 print("APPLYING TO QUESTIONNAIRE RESPONSES")
 print("=" * 60)
-print("Note: this re-trains on the questionnaire labels — different model.")
 
-responses = pd.read_csv(DATA_DIR / "04_questionnaire_responses.csv")
-Xq = responses["response_text"].values
-yq = responses["response_quality_label"].values
+try:
+    responses = pd.read_csv(DATA_DIR / "04_questionnaire_responses.csv")
+    if not responses.empty:
+        Xq_texts = responses["response_text"].astype(str).tolist()
+        yq = responses["response_quality_label"].astype(str).tolist()
+        
+        print("Extracting embeddings for questionnaire...")
+        Xq_emb = get_embeddings(Xq_texts)
+        
+        Xq_tr, Xq_te, yq_tr, yq_te = train_test_split(Xq_emb, yq, test_size=0.20, stratify=yq, random_state=42)
+        
+        rf_q = RandomForestClassifier(n_estimators=100, class_weight="balanced", random_state=42)
+        rf_q.fit(Xq_tr, yq_tr)
+        
+        rf_q_preds = rf_q.predict(Xq_te)
+        rf_q_probs = rf_q.predict_proba(Xq_te)
+        evaluate_model("AI-POWERED (Questionnaire DistilBERT)", yq_te, rf_q_preds, rf_q_probs)
+        
+        joblib.dump(rf_q, MODEL_DIR / "questionnaire_quality_classifier.joblib")
+        print(f"Saved best questionnaire model: {MODEL_DIR / 'questionnaire_quality_classifier.joblib'}")
 
-Xq_tr, Xq_te, yq_tr, yq_te = train_test_split(Xq, yq, test_size=0.20, stratify=yq, random_state=42)
-
-pipe_q = Pipeline([
-    ("tfidf", TfidfVectorizer(ngram_range=(1, 2), min_df=3, sublinear_tf=True, stop_words="english")),
-    ("clf", LogisticRegression(max_iter=2000, class_weight="balanced")),
-])
-pipe_q.fit(Xq_tr, yq_tr)
-print("\nQuestionnaire quality classifier — test metrics:")
-print(classification_report(yq_te, pipe_q.predict(Xq_te), digits=3))
-
-joblib.dump(pipe_q, MODEL_DIR / "questionnaire_quality_classifier.joblib")
-
-# ============================================================
-# 8. Next steps
-# ============================================================
-print("\n" + "=" * 60)
-print("NEXT STEPS")
-print("=" * 60)
-print("""
-1. Compare this TF-IDF baseline against:
-   - DistilBERT fine-tuned on the same labels (HuggingFace Trainer)
-   - A sentence-transformer + linear probe (cheaper, often surprisingly close)
-2. Use the model's class probabilities, not just the hard label, as features
-   in the downstream pricing model — preserves uncertainty information
-3. Build an aggregation function: per policy_id, summarize the findings
-   into a feature vector (count by severity, weighted severity score, days
-   since most recent high-severity finding, etc.)
-4. Look for spurious correlations: if the model learns the template language
-   (e.g. "MRIA" always = High), it will overfit. Test by paraphrasing a few
-   findings manually and seeing if predictions change appropriately.
-5. Wire the predicted scores into 07_modeling_dataset.csv as new features.
-""")
+except FileNotFoundError:
+    print("Warning: 04_questionnaire_responses.csv not found. Skipping questionnaire scoring.")

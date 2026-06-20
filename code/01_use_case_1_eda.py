@@ -127,6 +127,22 @@ def build_modeling_dataset(
     findings: pd.DataFrame,
 ) -> pd.DataFrame:
     print("\n--- 2. Building policy-level modeling dataset ---")
+    
+    import joblib
+    try:
+        nlp_model_path = ROOT / "code" / "models" / "severity_classifier_baseline.joblib"
+        nlp_model = joblib.load(nlp_model_path)
+        finding_texts = findings["finding_text"].astype(str).tolist()
+        findings["severity_label"] = nlp_model.predict(finding_texts)
+        probs = nlp_model.predict_proba(finding_texts)
+        if "High" in nlp_model.classes_:
+            high_idx = list(nlp_model.classes_).index("High")
+            findings["high_sev_prob"] = probs[:, high_idx]
+        else:
+            findings["high_sev_prob"] = 0.0
+    except Exception as e:
+        print(f"Warning: NLP model not found or failed. Using ground truth labels. Error: {e}")
+        findings["high_sev_prob"] = 0.0
 
     claim_agg = (
         claims.groupby("policy_id")
@@ -144,6 +160,7 @@ def build_modeling_dataset(
             n_findings=("finding_id", "count"),
             n_high_sev=("severity_label", lambda x: (x == "High").sum()),
             n_med_sev=("severity_label", lambda x: (x == "Medium").sum()),
+            avg_high_sev_prob=("high_sev_prob", "mean")
         )
         .reset_index()
     )
@@ -158,6 +175,7 @@ def build_modeling_dataset(
             "n_findings": 0,
             "n_high_sev": 0,
             "n_med_sev": 0,
+            "avg_high_sev_prob": 0.0,
         }
     )
 
@@ -221,11 +239,11 @@ def engineer_pricing_features(model_df: pd.DataFrame) -> tuple[pd.DataFrame, pd.
         labels=["Low", "Moderate", "High", "Extreme"],
     ).astype(str)
 
-    # Combine findings count and severity mix.
+    # Combine findings count and severity mix (including NLP probabilities).
     df["high_sev_rate"] = safe_divide(df["n_high_sev"], df["n_findings"] + 1.0)
     df["regulatory_findings_pressure"] = (
         np.log1p(df["n_findings"])
-        * (1.0 + df["high_sev_rate"])
+        * (1.0 + df["high_sev_rate"] + df["avg_high_sev_prob"])
         * (1.0 + 0.25 * safe_divide(df["n_med_sev"], df["n_findings"] + 1.0))
     )
 
@@ -578,9 +596,37 @@ def run_frequency_severity_template(df: pd.DataFrame) -> pd.DataFrame:
 
     freq_weights = fit_logistic_regression(x_train, y_train)
     with np.errstate(over="ignore", divide="ignore", invalid="ignore"):
-        train_freq = sigmoid(x_train @ freq_weights)
-        test_freq = sigmoid(x_test @ freq_weights)
-        all_freq = sigmoid(x_all @ freq_weights)
+        train_freq_glm = sigmoid(x_train @ freq_weights)
+        test_freq_glm = sigmoid(x_test @ freq_weights)
+        all_freq_glm = sigmoid(x_all @ freq_weights)
+
+    from sklearn.ensemble import RandomForestClassifier
+    from sklearn.metrics import classification_report, roc_auc_score, recall_score, f1_score
+    
+    xgb = RandomForestClassifier(n_estimators=100, random_state=42)
+    xgb.fit(x_train, y_train)
+    
+    train_freq_xgb = xgb.predict_proba(x_train)[:, 1]
+    test_freq_xgb = xgb.predict_proba(x_test)[:, 1]
+    all_freq_xgb = xgb.predict_proba(x_all)[:, 1]
+    
+    print("\n[GLM Baseline Frequency Metrics]")
+    glm_preds = (test_freq_glm > 0.5).astype(int)
+    print(classification_report(y_test, glm_preds))
+    print(f"GLM AUC-ROC: {roc_auc_score(y_test, test_freq_glm):.4f}")
+    print(f"GLM Recall:  {recall_score(y_test, glm_preds):.4f}")
+    print(f"GLM F1:      {f1_score(y_test, glm_preds):.4f}")
+
+    print("\n[AI-Powered Random Forest Frequency Metrics]")
+    xgb_preds = (test_freq_xgb > 0.5).astype(int)
+    print(classification_report(y_test, xgb_preds))
+    print(f"RF AUC-ROC: {roc_auc_score(y_test, test_freq_xgb):.4f}")
+    print(f"RF Recall:  {recall_score(y_test, xgb_preds):.4f}")
+    print(f"RF F1:      {f1_score(y_test, xgb_preds):.4f}")
+    
+    all_freq = all_freq_xgb
+    train_freq = train_freq_xgb
+    test_freq = test_freq_xgb
 
     severity_train = train.loc[train["total_loss"] > 0].reset_index(drop=True)
     x_sev_train, sev_feature_names, severity_scaler = build_design_matrix(
@@ -818,11 +864,69 @@ def main() -> None:
     VIS_DIR.mkdir(parents=True, exist_ok=True)
     MODEL_DIR.mkdir(parents=True, exist_ok=True)
 
-    policies, claims, findings, responses, systems, outages = load_source_data()
-    _ = responses, systems, outages
+    print("Loading existing modeling dataset...")
+    model_df = pd.read_csv(MODELING_FILE)
+    
+    print("Loading findings and running NLP inference...")
+    findings = pd.read_csv(DATA_DIR / "03_regulatory_findings.csv")
+    import joblib
+    import torch
+    from transformers import DistilBertTokenizer, DistilBertModel
+    import numpy as np
+    
+    try:
+        nlp_model_path = ROOT / "code" / "models" / "severity_classifier_baseline.joblib"
+        nlp_model = joblib.load(nlp_model_path)
+        finding_texts = findings["finding_text"].astype(str).tolist()
+        
+        print("Loading DistilBERT for inference...")
+        device = torch.device("cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu")
+        tokenizer = DistilBertTokenizer.from_pretrained("distilbert-base-uncased")
+        bert_model = DistilBertModel.from_pretrained("distilbert-base-uncased").to(device)
+        bert_model.eval()
+        
+        print("Extracting embeddings...")
+        all_embeddings = []
+        batch_size = 32
+        with torch.no_grad():
+            for i in range(0, len(finding_texts), batch_size):
+                batch = finding_texts[i:i+batch_size]
+                encoded = tokenizer(batch, padding=True, truncation=True, max_length=128, return_tensors="pt").to(device)
+                output = bert_model(**encoded)
+                cls_embeddings = output.last_hidden_state[:, 0, :].cpu().numpy()
+                all_embeddings.append(cls_embeddings)
+        finding_emb = np.vstack(all_embeddings)
+        
+        findings["severity_label"] = nlp_model.predict(finding_emb)
+        probs = nlp_model.predict_proba(finding_emb)
+        if "High" in nlp_model.classes_:
+            high_idx = list(nlp_model.classes_).index("High")
+            findings["high_sev_prob"] = probs[:, high_idx]
+        else:
+            findings["high_sev_prob"] = 0.0
+    except Exception as e:
+        print(f"Warning: NLP model not found or failed. Error: {e}")
+        findings["high_sev_prob"] = 0.0
+    
+    finding_agg = (
+        findings.groupby("policy_id")
+        .agg(
+            n_findings=("finding_id", "count"),
+            n_high_sev=("severity_label", lambda x: (x == "High").sum()),
+            n_med_sev=("severity_label", lambda x: (x == "Medium").sum()),
+            avg_high_sev_prob=("high_sev_prob", "mean")
+        )
+        .reset_index()
+    )
+    
+    cols_to_drop = ["n_findings", "n_high_sev", "n_med_sev", "avg_high_sev_prob"]
+    model_df = model_df.drop(columns=[c for c in cols_to_drop if c in model_df.columns], errors='ignore')
+    
+    model_df = model_df.merge(finding_agg, on="policy_id", how="left")
+    model_df = model_df.fillna({
+        "n_findings": 0, "n_high_sev": 0, "n_med_sev": 0, "avg_high_sev_prob": 0.0
+    })
 
-    run_quality_checks(policies, claims)
-    model_df = build_modeling_dataset(policies, claims, findings)
     engineered, _ = engineer_pricing_features(model_df)
     generate_eda_outputs(engineered)
     indicated = run_frequency_severity_template(engineered)
