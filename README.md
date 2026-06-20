@@ -1,14 +1,59 @@
-# Intern Package: Cyber Risk & BI Pricing Models
+# Maestro Cyber Pricing Models
 
-Start here. Read in this order:
+Welcome to the Maestro Cyber Risk & BI Pricing Engine repository. This project establishes an end-to-end data science and actuarial pipeline encompassing two primary use cases: **Frequency-Severity Pricing** and **Advanced Business Interruption (BI) Simulation**.
 
-1. `docs/Intern_Onboarding_Package.docx` — Full onboarding document. Scope, technical components, workplan, week 1 tasks.
-2. `data/DATA_DICTIONARY.md` — Description of every dataset and field.
-3. `starter_code/01_use_case_1_eda.py` — Exploratory data analysis starter
-4. `starter_code/03_nlp_severity_baseline.py` — NLP severity classifier baseline
-5. `starter_code/02_use_case_2_bi_simulation.py` — BI Monte Carlo skeleton
+## 🚀 Live Streamlit Dashboards
+You can interact with the outputs, visualize risk patterns, and run live Monte Carlo simulations using the following Streamlit applications. 
 
-## Quick Start
+To launch them, open your terminal in this repository and run the dynamic links below:
+
+- **[Use Case 1: Frequency-Severity Pricing & EDA](http://localhost:8501)**
+  - Run command: `streamlit run app.py`
+- **[Use Case 2: Advanced BI Ransomware Simulator](http://localhost:8502)**
+  - Run command: `streamlit run app_2.py`
+
+*(Note: Click the dynamic links above once you have executed the respective run commands in your terminal.)*
+
+---
+
+## The End-to-End Pricing Journey
+
+### 1. Feature Engineering
+The foundation of the pricing engine starts with transforming raw, disparate data into a cohesive modeling dataset.
+- **Data Merging:** We combined policyholder details, security control scores (e.g., NIST), third-party vendor risk data, and historical claim events.
+- **Categorical & Numeric Transformations:** Categorical variables like `sub_sector` and `primary_regulator` were one-hot encoded to allow machine learning algorithms to interpret them.
+- **NLP Severity Extraction (DistilBERT):** To handle unstructured text from regulatory findings, we implemented a deep-learning `DistilBERT` pipeline. This model reads raw textual findings, converts them into high-dimensional vector embeddings, and uses a Random Forest classifier to output the probability of a "High Severity" finding. This probability (`high_sev_prob`) is injected back into the tabular data as a powerful engineered feature.
+
+### 2. Frequency & Severity Modeling (Use Case 1)
+With the engineered dataset ready, we predict the foundational components of insurance loss:
+- **Frequency (Probability of Claim):** Using algorithmic class weighting to combat the heavily imbalanced dataset (claims are rare), we trained AI-Powered models (Random Forest) to predict the likelihood of an insured suffering a cyber event in a given year. The Random Forest significantly outperformed traditional Generalized Linear Models (GLMs).
+- **Severity (Cost of Claim):** We mapped historical loss data against our features to determine the expected average severity if a claim does occur.
+
+### 3. Pure Premium Calculation
+The **Pure Premium** represents the pure mathematical expectation of loss.
+- **In Use Case 1:** It is simply `Predicted Frequency × Expected Severity`.
+- **In Use Case 2 (BI Simulation):** It is the **Mean** of $50,000$ Monte Carlo simulated years. The simulator models correlated ransomware attacks hitting multiple systems, applying bimodal Gaussian Mixture distributions to determine exact downtime and revenue loss.
+
+### 4. Advanced Actuarial Risk Margin
+Because the Pure Premium only covers the *average* expectation, an insurance company must charge more to protect against volatility and catastrophic tail risks (like a systemic ransomware outbreak). 
+- We isolate the worst 1% of simulated years using **Tail Value at Risk (TVaR 99%)**.
+- The required capital base to survive these catastrophic years is `TVaR_99 - Expected Loss`.
+- We apply a **Cost of Capital Charge** (e.g., 10%) to this required capital base, yielding our dynamic **Risk Load**. 
+- Highly secure companies receive a tiny risk load, while highly volatile profiles receive massive risk loads.
+
+### 5. Technical Premium Derivation
+The final **Technical Premium** is the actual price required to confidently underwrite the policy while paying for all operational expenses.
+- **Formula:** `(Pure Premium + Risk Load) / (1 - Expense Ratio)`
+- **Components:**
+  - *Pure Premium:* Pays the expected claims.
+  - *Risk Load:* Pays the shareholders/investors for risking their capital on catastrophic tail events.
+  - *Expense Ratio (e.g. 25%):* Pays the broker commissions, underwriters, and company overhead.
+
+The result is a hyper-accurate, AI-driven, risk-adjusted technical premium that correctly prices modern cyber risk!
+
+---
+
+## Developer Quick Start
 
 ```bash
 # Set up environment
@@ -16,79 +61,25 @@ python -m venv venv
 source venv/bin/activate            # Windows: venv\Scripts\activate
 pip install -r requirements.txt
 
-# Generate mock data (already pre-generated in /data, but verifies your setup)
-python generate_mock_data.py
-
-# Run the three starter scripts
-python starter_code/01_use_case_1_eda.py
-python starter_code/03_nlp_severity_baseline.py
-python starter_code/02_use_case_2_bi_simulation.py
-```
-
-If all three scripts run without errors and produce printed summaries, your environment is correctly set up.
-
-## Cyber Pricing Feature Pipeline
-
-The current pricing workflow lives in the first EDA file and creates a modeling dataset, pruned feature table, EDA dashboard, and first-pass pure premium indications.
-
-```bash
+# Run the three core scripts
 python code/01_use_case_1_eda.py
+python code/03_nlp_severity_baseline.py
+python code/02_use_case_2_bi_simulation.py
 ```
-
-In VS Code, you can also run the default build task:
-
-```text
-Terminal > Run Build Task > Cyber Pricing: Full EDA Pipeline
-```
-
-Key outputs:
-
-- `data/09_cyber_pricing_features.csv`
-- `data/09_feature_dictionary.csv`
-- `outputs/eda_visuals/cyber_pricing_eda_dashboard.html`
-- `outputs/model_outputs/pure_premium_indications.csv`
-- `outputs/model_outputs/model_diagnostics.txt`
-
-The first model template uses:
-
-```text
-Pure Premium = Expected Claim Frequency * Expected Claim Severity
-Technical Premium = Pure Premium / (1 - total_load)
-```
-
-See `docs/cyber_pricing_feature_engineering_plan.md` for the merged features and variable exclusions.
 
 ## Repository Layout
-
 ```
-intern_package/
-├── README.md                          (this file)
+maestro_cyber/
+├── README.md                           (this file)
 ├── requirements.txt
-├── generate_mock_data.py              (reproduces the mock datasets)
-├── build_docx.js                      (rebuilds the onboarding doc; ignore unless updating)
-├── data/
-│   ├── DATA_DICTIONARY.md
-│   ├── 01_policies.csv
-│   ├── 02_claims.csv
-│   ├── 03_regulatory_findings.csv
-│   ├── 04_questionnaire_responses.csv
-│   ├── 05_system_recovery_profiles.csv
-│   ├── 06_outage_events.csv
-│   ├── 07_modeling_dataset.csv         (produced by 01_use_case_1_eda.py)
-│   └── 08_bi_pricing_output_sample.csv (produced by 02_use_case_2_bi_simulation.py)
-├── starter_code/
-│   ├── 01_use_case_1_eda.py
-│   ├── 02_use_case_2_bi_simulation.py
-│   ├── 03_nlp_severity_baseline.py
-│   └── models/                         (saved baseline models)
-└── docs/
-    └── Intern_Onboarding_Package.docx
+├── app.py                              (Streamlit Dashboard for Use Case 1)
+├── app_2.py                            (Streamlit Dashboard for Use Case 2)
+├── data/                               (Mock datasets and output features)
+├── code/
+│   ├── 01_use_case_1_eda.py            (End-to-End Pipeline & Modeling)
+│   ├── 02_use_case_2_bi_simulation.py  (Actuarial Monte Carlo Engine)
+│   ├── 03_nlp_severity_baseline.py     (DistilBERT extraction)
+│   └── models/                         (Saved joblib baseline models)
+├── outputs/                            (Saved EDA visuals and diagnostics)
+└── docs/                               (Documentation and planning notes)
 ```
-
-## Important Reminders
-
-- All data in `data/` is synthetic — no real institution is represented.
-- The mock data is cleaner than real production data. Build defensively.
-- Some data quality issues are intentional. Finding and handling them is part of the work.
-- Commit early and often. Daily commits to a shared repo are expected.
-- Reach out before you spend two days on the wrong thing. The cost of a question is low.
