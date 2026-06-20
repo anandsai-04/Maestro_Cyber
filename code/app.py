@@ -263,7 +263,7 @@ with tab_nlp:
     
     st.subheader("Impact of AI NLP Risk on Financial Losses")
     fig_nlp = px.scatter(df, x="regulatory_findings_pressure", y="total_loss", color="had_claim", 
-                         size="exposure_size_score", log_y=True,
+                         log_y=True,
                          labels={"regulatory_findings_pressure": "DistilBERT Extracted Regulatory Risk Score", "total_loss": "Total Loss ($)"},
                          color_continuous_scale="Reds")
     st.plotly_chart(fig_nlp, use_container_width=True)
