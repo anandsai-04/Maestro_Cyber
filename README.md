@@ -39,22 +39,36 @@ We rigorously evaluated three predictive algorithms for the frequency model. The
 | **Random Forest (AI)** | 0.6231 | 0.0000 | Better predictive power. Captures interactions between security controls. |
 | **XGBoost (AI)** | **0.6434** | 0.0000 | **Best performance.** Gradient boosting excels at finding subtle, sequential risk patterns. |
 
-### 3. Pure Premium Calculation & Monte Carlo Engine
-The **Pure Premium** represents the pure mathematical expectation of loss (the exact amount of money needed just to pay the average claims, with no profit).
+### 3. Pure Premium Calculation & The Monte Carlo Engine (Use Case 2)
+The **Pure Premium** represents the exact amount of money needed just to pay the expected claims, with no profit built in.
 
 - **The Core Actuarial Formula:** `Pure Premium = Expected Frequency × Expected Severity`
-- **In Use Case 1:** We calculate this deterministically using the outputs of the machine learning models.
-- **In Use Case 2 (Monte Carlo Frequency-Severity Simulation):** We run an advanced stochastic simulation to generate 50,000 parallel universes (years) for a single policy. 
-  - **Simulating Frequency:** In each universe, we draw from a Poisson distribution (driven by the AI frequency probability) to see exactly *how many* attacks hit the company. 
-  - **Simulating Severity:** For every attack that occurs, we draw from a Lognormal distribution to simulate the *financial severity* of that specific attack.
-  - The sum of all losses in a simulated year is the total BI loss for that universe. The **Mean** of all 50,000 universes becomes our simulated Pure Premium, while the worst universes represent our extreme Tail Risk.
+- **In Use Case 1:** We calculate this deterministically using the strict mathematical outputs of the machine learning models.
 
-### 4. Advanced Actuarial Risk Margin
-Because the Pure Premium only covers the *average* expectation, an insurance company must charge more to protect against volatility and catastrophic tail risks (like a systemic ransomware outbreak). 
-- We isolate the worst 1% of simulated years using **Tail Value at Risk (TVaR 99%)**.
-- The required capital base to survive these catastrophic years is `TVaR_99 - Expected Loss`.
-- We apply a **Cost of Capital Charge** (e.g., 10%) to this required capital base, yielding our dynamic **Risk Load**. 
-- Highly secure companies receive a tiny risk load, while highly volatile profiles receive massive risk loads.
+However, deterministic models fail to capture the extreme volatility of modern cyber threats. To solve this, **Use Case 2** introduces a Stochastic Monte Carlo Engine to simulate the exact drivers of Business Interruption (BI) loss. Here is the step-by-step intuition behind the code in `02_use_case_2_bi_simulation.py`:
+
+#### Step 1: 50,000 Parallel Universes
+Instead of looking at the "average" year, the `numpy`-powered engine simulates 50,000 potential future years for *every single policy*.
+
+#### Step 2: Simulating Attacks (Frequency via Poisson)
+For each of the 50,000 years, the engine rolls a mathematical dice using a **Poisson Distribution**. The `lambda` (mean) of this distribution is the AI-predicted frequency from Use Case 1. This determines exactly how many attacks (0, 1, or 2+) hit the company in that specific simulated year.
+
+#### Step 3: Simulating BI Loss & The Vendor Pressure Threat (Severity)
+If an attack occurs in a simulated year, the engine calculates the financial damage. We specifically focus on **Business Interruption (BI)**, calculating `Downtime Days × Daily Revenue`.
+- **The Normal Scenario:** The engine draws downtime days from a standard Lognormal distribution.
+- **The Vendor Pressure Threat:** How does Use Case 2 explain massive BI losses? It is based specifically on `vendor_control_pressure` and `regulatory_findings_pressure`. If a company has poor third-party vendor controls, the engine mathematically shifts the simulation into a **Bimodal Gaussian Mixture Distribution**. This simulates a "systemic" supply-chain ransomware event (e.g., an IT vendor gets hacked, taking down the policyholder's entire network). This bimodal shift drastically increases the simulated downtime days from a standard 3-5 days to 14-30+ days, causing the BI loss to explode.
+
+#### Step 4: Finding the Catastrophic Tail Risk (TVaR 99%)
+After simulating 50,000 years, we have a massive spectrum of possible financial outcomes.
+- We calculate the **Mean** of all 50,000 years to get our **Simulated Pure Premium**.
+- We isolate the absolute worst 500 years (the top 1%). The average loss of those worst 500 years is our **TVaR 99% (Tail Value at Risk)**.
+
+### 4. Advanced Actuarial Risk Margin & Capital Reserving
+Because the Pure Premium only covers the *average* expectation, an insurance company must hold massive cash reserves to survive the extreme tail events identified by the Monte Carlo simulator.
+
+- **Required Capital:** To survive the worst-case scenario, the company must hold `TVaR_99 - Simulated Pure Premium` in cash reserves.
+- **Risk Load Calculation:** Holding cash costs money. Investors demand a return on capital (e.g., a 10% Cost of Capital). Therefore, our engine calculates the dynamic **Risk Load** as `Required Capital × 10%`.
+- Companies with severe Vendor Pressure will have massive TVaR 99% spikes, resulting in massive Risk Loads. Highly secure companies receive a tiny risk load.
 
 ### 5. Technical Premium Derivation
 The final **Technical Premium** is the actual price required to confidently underwrite the policy while paying for all operational expenses.
