@@ -26,13 +26,28 @@ The foundation of the pricing engine starts with transforming raw, disparate dat
 
 ### 2. Frequency & Severity Modeling (Use Case 1)
 With the engineered dataset ready, we predict the foundational components of insurance loss:
-- **Frequency (Probability of Claim):** Using algorithmic class weighting to combat the heavily imbalanced dataset (claims are rare), we trained AI-Powered models (Random Forest) to predict the likelihood of an insured suffering a cyber event in a given year. The Random Forest significantly outperformed traditional Generalized Linear Models (GLMs).
-- **Severity (Cost of Claim):** We mapped historical loss data against our features to determine the expected average severity if a claim does occur.
+- **How it is AI-Powered:** Instead of relying on rigid, linear traditional actuarial models, we use Machine Learning. Non-linear, tree-based models like Random Forest and XGBoost capture complex interactions (e.g., how the *combination* of a weak vendor score and missing multi-factor authentication exponentially increases risk). Additionally, we use NLP (DistilBERT) to dynamically read unstructured regulatory text and convert it into a numeric risk probability.
+- **Frequency (Probability of Claim):** Using algorithmic class weighting to combat the heavily imbalanced dataset (claims are rare), we trained multiple algorithms to predict the likelihood of an insured suffering a cyber event in a given year.
+- **Severity (Cost of Claim):** We mapped historical loss data against our features using a lognormal regression to determine the expected average severity if a claim does occur.
 
-### 3. Pure Premium Calculation
-The **Pure Premium** represents the pure mathematical expectation of loss.
-- **In Use Case 1:** It is simply `Predicted Frequency × Expected Severity`.
-- **In Use Case 2 (BI Simulation):** It is the **Mean** of $50,000$ Monte Carlo simulated years. The simulator models correlated ransomware attacks hitting multiple systems, applying bimodal Gaussian Mixture distributions to determine exact downtime and revenue loss.
+#### Model Comparison Results
+We rigorously evaluated three predictive algorithms for the frequency model. The predictive strength was measured using AUROC (Area Under the Receiver Operating Characteristic curve) which captures how well the model separates the 'Claim' vs 'No Claim' groups. Because cyber claims are rare events, traditional F1-Scores at a 0.5 threshold are zero, but the AUROC clearly shows AI's superiority:
+
+| Algorithm | AUROC | F1-Score (at 0.5 thresh) | Actuarial Verdict |
+| :--- | :--- | :--- | :--- |
+| **Traditional GLM** | 0.5965 | 0.0000 | Baseline performance. Cannot capture non-linear cyber risks. |
+| **Random Forest (AI)** | 0.6231 | 0.0000 | Better predictive power. Captures interactions between security controls. |
+| **XGBoost (AI)** | **0.6434** | 0.0000 | **Best performance.** Gradient boosting excels at finding subtle, sequential risk patterns. |
+
+### 3. Pure Premium Calculation & Monte Carlo Engine
+The **Pure Premium** represents the pure mathematical expectation of loss (the exact amount of money needed just to pay the average claims, with no profit).
+
+- **The Core Actuarial Formula:** `Pure Premium = Expected Frequency × Expected Severity`
+- **In Use Case 1:** We calculate this deterministically using the outputs of the machine learning models.
+- **In Use Case 2 (Monte Carlo Frequency-Severity Simulation):** We run an advanced stochastic simulation to generate 50,000 parallel universes (years) for a single policy. 
+  - **Simulating Frequency:** In each universe, we draw from a Poisson distribution (driven by the AI frequency probability) to see exactly *how many* attacks hit the company. 
+  - **Simulating Severity:** For every attack that occurs, we draw from a Lognormal distribution to simulate the *financial severity* of that specific attack.
+  - The sum of all losses in a simulated year is the total BI loss for that universe. The **Mean** of all 50,000 universes becomes our simulated Pure Premium, while the worst universes represent our extreme Tail Risk.
 
 ### 4. Advanced Actuarial Risk Margin
 Because the Pure Premium only covers the *average* expectation, an insurance company must charge more to protect against volatility and catastrophic tail risks (like a systemic ransomware outbreak). 

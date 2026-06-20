@@ -600,12 +600,21 @@ def run_frequency_severity_template(df: pd.DataFrame) -> pd.DataFrame:
         test_freq_glm = sigmoid(x_test @ freq_weights)
         all_freq_glm = sigmoid(x_all @ freq_weights)
 
-    from sklearn.ensemble import RandomForestClassifier
+    from sklearn.ensemble import RandomForestClassifier, HistGradientBoostingClassifier
     from sklearn.metrics import classification_report, roc_auc_score, recall_score, f1_score
     
-    xgb = RandomForestClassifier(n_estimators=100, random_state=42)
-    xgb.fit(x_train, y_train)
+    # Train Random Forest
+    rf = RandomForestClassifier(n_estimators=100, random_state=42)
+    rf.fit(x_train, y_train)
     
+    train_freq_rf = rf.predict_proba(x_train)[:, 1]
+    test_freq_rf = rf.predict_proba(x_test)[:, 1]
+    all_freq_rf = rf.predict_proba(x_all)[:, 1]
+    
+    # Train XGBoost equivalent (HistGradientBoosting)
+    xgb = HistGradientBoostingClassifier(learning_rate=0.05, max_depth=4, random_state=42)
+    xgb.fit(x_train, y_train)
+
     train_freq_xgb = xgb.predict_proba(x_train)[:, 1]
     test_freq_xgb = xgb.predict_proba(x_test)[:, 1]
     all_freq_xgb = xgb.predict_proba(x_all)[:, 1]
@@ -618,11 +627,18 @@ def run_frequency_severity_template(df: pd.DataFrame) -> pd.DataFrame:
     print(f"GLM F1:      {f1_score(y_test, glm_preds):.4f}")
 
     print("\n[AI-Powered Random Forest Frequency Metrics]")
+    rf_preds = (test_freq_rf > 0.5).astype(int)
+    print(classification_report(y_test, rf_preds))
+    print(f"RF AUC-ROC: {roc_auc_score(y_test, test_freq_rf):.4f}")
+    print(f"RF Recall:  {recall_score(y_test, rf_preds):.4f}")
+    print(f"RF F1:      {f1_score(y_test, rf_preds):.4f}")
+    
+    print("\n[AI-Powered XGBoost Frequency Metrics]")
     xgb_preds = (test_freq_xgb > 0.5).astype(int)
     print(classification_report(y_test, xgb_preds))
-    print(f"RF AUC-ROC: {roc_auc_score(y_test, test_freq_xgb):.4f}")
-    print(f"RF Recall:  {recall_score(y_test, xgb_preds):.4f}")
-    print(f"RF F1:      {f1_score(y_test, xgb_preds):.4f}")
+    print(f"XGB AUC-ROC: {roc_auc_score(y_test, test_freq_xgb):.4f}")
+    print(f"XGB Recall:  {recall_score(y_test, xgb_preds):.4f}")
+    print(f"XGB F1:      {f1_score(y_test, xgb_preds):.4f}")
     
     all_freq = all_freq_xgb
     train_freq = train_freq_xgb
@@ -782,6 +798,30 @@ and separate BI frequency/severity logic before using indications commercially.
     print(f"Wrote diagnostics: {DIAGNOSTICS_FILE}")
     print(f"Average pure premium: {indicated['pure_premium'].mean():,.2f}")
     print(f"Average technical premium template: {indicated['technical_premium_template'].mean():,.2f}")
+    
+    # ---------------------------------------------------------
+    # EXPORT MODELS FOR STREAMLIT DASHBOARD INFERENCE
+    # ---------------------------------------------------------
+    import joblib
+    import json
+    
+    export_dir = ROOT / "code" / "models"
+    export_dir.mkdir(parents=True, exist_ok=True)
+    
+    joblib.dump(xgb, export_dir / "rf_freq_model.joblib")
+    np.save(export_dir / "glm_freq_weights.npy", freq_weights)
+    np.save(export_dir / "sev_weights.npy", severity_weights)
+    
+    # Save severity sigma as a simple text/json or single value array
+    np.save(export_dir / "sev_sigma.npy", np.array([severity_sigma]))
+    
+    joblib.dump(train_scaler, export_dir / "model_scaler.joblib")
+    
+    with open(export_dir / "feature_columns.json", "w") as f:
+        json.dump(feature_names[1:], f)  # Exclude 'intercept' from the required input columns
+
+    print(f"Exported interactive models to: {export_dir}")
+    
     return indicated
 
 
