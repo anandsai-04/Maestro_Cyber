@@ -8,35 +8,96 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import roc_auc_score
 from pathlib import Path
 
+try:
+    from google import genai
+    from google.genai import types
+except ImportError:
+    pass
+
 # Setup Paths
 BASE_DIR = Path(__file__).resolve().parent
 DATA_DIR = BASE_DIR / "data"
 
 st.set_page_config(page_title="Advanced Cyber Actuarial Dashboard", layout="wide", page_icon="🛡️")
 
-# Custom CSS for aesthetics
+# Premium Glassmorphism CSS & Modern Typography
 st.markdown("""
 <style>
+    @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600&display=swap');
+    
+    html, body, [class*="css"]  {
+        font-family: 'Outfit', sans-serif;
+    }
+    
+    .stApp {
+        background: linear-gradient(135deg, #0f172a, #1e1b4b);
+        color: #e2e8f0;
+    }
+    
+    h1, h2, h3 {
+        background: -webkit-linear-gradient(45deg, #38bdf8, #a855f7);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        font-weight: 600;
+    }
+    
     .metric-card {
-        background-color: #1e1e2f;
+        background: rgba(255, 255, 255, 0.05);
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+        border-radius: 16px;
+        border: 1px solid rgba(255, 255, 255, 0.1);
         padding: 20px;
-        border-radius: 10px;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.3);
         margin-bottom: 20px;
         text-align: center;
-        border: 1px solid #333;
+        box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+        transition: transform 0.3s ease, box-shadow 0.3s ease;
     }
+    
+    .metric-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 8px 40px rgba(0, 0, 0, 0.3);
+    }
+    
     .metric-value {
         font-size: 2.5rem;
         font-weight: bold;
-        color: #00d2ff;
+        color: #38bdf8;
         margin: 10px 0;
     }
+    
     .metric-label {
         font-size: 1rem;
-        color: #aaa;
+        color: #94a3b8;
         text-transform: uppercase;
         letter-spacing: 1px;
+    }
+    
+    .glass-card {
+        background: rgba(255, 255, 255, 0.05);
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+        border-radius: 16px;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        padding: 20px;
+        margin: 10px 0;
+        box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+        transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+    
+    /* Chat bubbles styling */
+    .stChatMessage {
+        background: rgba(255, 255, 255, 0.03) !important;
+        border-radius: 15px !important;
+        border: 1px solid rgba(255,255,255,0.05) !important;
+    }
+    
+    /* Input fields */
+    .stTextInput input {
+        background: rgba(0,0,0,0.2) !important;
+        border: 1px solid rgba(255,255,255,0.1) !important;
+        color: white !important;
+        border-radius: 8px !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -99,10 +160,11 @@ glm_auc = roc_auc_score(y_freq, df["glm_prob"])
 # ==========================================
 # TABS
 # ==========================================
-tab_calc, tab_features, tab_models = st.tabs([
+tab_calc, tab_features, tab_models, tab_agent = st.tabs([
     "🧮 Interactive Pricing Engine", 
     "🧠 Engineered Features Analytics", 
-    "📊 Model Comparison & Tail Risk"
+    "📊 Model Comparison & Tail Risk",
+    "🤖 AI Actuarial Chatbot"
 ])
 
 
@@ -299,6 +361,91 @@ with tab_models:
                                 color_discrete_sequence=['#FF4B4B'])
         fig_tail.add_vline(x=p95, line_dash="dash", line_color="orange", annotation_text="VaR 95%")
         fig_tail.add_vline(x=p99, line_dash="dash", line_color="red", annotation_text="VaR 99%")
-        fig_tail.add_vline(x=tvar, line_dash="solid", line_color="darkred", annotation_text="TVaR 99%")
-        fig_tail.update_layout(showlegend=False, title="Tail Distribution of Historical Losses")
+        
         st.plotly_chart(fig_tail, use_container_width=True)
+        st.markdown(f"**99% Tail Value at Risk (TVaR):** The average loss of the worst 1% of claims is **${tvar:,.0f}**. This is the capital required to survive systemic events like widespread vendor ransomware.")
+
+
+# ------------------------------------------
+# TAB 4: AI ACTUARIAL CHATBOT
+# ------------------------------------------
+with tab_agent:
+    st.markdown('<div class="glass-card">', unsafe_allow_html=True)
+    st.subheader("🤖 AI Actuarial Report & Chat")
+    st.write("This agent uses Gemini ADK to explain the portfolio's BI loss, Vendor Control Pressure, and Regulatory Pressure.")
+    
+    api_key = st.text_input("Enter Gemini API Key to run Agent:", type="password", key="agent_key_app1")
+    
+    if api_key:
+        client = genai.Client(api_key=api_key)
+        
+        # Load SHAP global feature importances
+        try:
+            shap_df = pd.read_csv("outputs/model_outputs/shap_importances.csv")
+            shap_importances = shap_df.set_index('Feature')['SHAP_Importance'].to_dict()
+        except FileNotFoundError:
+            shap_importances = {"Error": "SHAP importances not generated yet."}
+            
+        stats = {
+            "avg_loss_ratio": df['loss_ratio'].mean(),
+            "avg_bi_loss": df['bi_loss'].mean(),
+            "AI_SHAP_Feature_Importances": shap_importances
+        }
+        
+        # Auto-generate report if not in session state
+        if "agent_report_app1" not in st.session_state:
+            with st.spinner("Agent is analyzing deterministic stats and SHAP importances..."):
+                prompt = f"""
+                You are an expert Chief Actuary reviewing a cyber insurance portfolio. 
+                I have already run the heavy deterministic calculations to save your tokens. 
+                Crucially, I have also included the SHAP Feature Importances from the XGBoost pricing engine.
+                
+                Here are the statistical effects and SHAP importances:
+                {stats}
+                
+                Write a concise executive report for the underwriters. 
+                Explicitly study and explain the effect of Vendor Control Pressure, Regulatory Findings, and Cyber Control Score on BI Loss.
+                **CRITICAL:** Explicitly use the AI_SHAP_Feature_Importances to explain *why* the AI Pricing Engine cares about certain features over others.
+                """
+                
+                response = client.models.generate_content(
+                    model='gemini-2.5-flash',
+                    contents=prompt
+                )
+                st.session_state["agent_report_app1"] = response.text
+                
+                # Initialize chat history
+                st.session_state.messages_app1 = [
+                    {"role": "model", "content": "I have completed the portfolio analysis. Ask me follow-up questions about BI loss, specific vendors, or risk drivers below!"}
+                ]
+        
+        st.markdown(st.session_state["agent_report_app1"])
+        
+        # Chat interface
+        st.markdown("---")
+        st.subheader("💬 Chat with the Agent")
+        
+        if "messages_app1" in st.session_state:
+            # Display chat messages
+            for msg in st.session_state.messages_app1:
+                with st.chat_message("assistant" if msg["role"] == "model" else "user"):
+                    st.write(msg["content"])
+                    
+            # Chat input
+            if prompt_input := st.chat_input("Ask about BI Loss or Vendor Pressure..."):
+                st.session_state.messages_app1.append({"role": "user", "content": prompt_input})
+                with st.chat_message("user"):
+                    st.write(prompt_input)
+                    
+                with st.chat_message("assistant"):
+                    with st.spinner("Thinking..."):
+                        chat = client.chats.create(model="gemini-2.5-flash")
+                        chat.send_message(f"Here is the context: {stats}. Report: {st.session_state['agent_report_app1']}. Answer the user.")
+                        response = chat.send_message(prompt_input)
+                        st.write(response.text)
+                
+                st.session_state.messages_app1.append({"role": "model", "content": response.text})
+    else:
+        st.info("Provide API key to automatically generate the AI report and start chatting.")
+    
+    st.markdown('</div>', unsafe_allow_html=True)
