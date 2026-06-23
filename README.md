@@ -76,11 +76,15 @@ maestro_cyber/
 ├── README.md                           (this file)
 ├── requirements.txt
 ├── app.py                              (Streamlit Dashboard - Main Application)
-├── data/                               (Mock datasets and output features)
+├── bi-explainer/                       (Gemini ADK Agent framework & code)
+├── data/                               (Mock datasets and engineered features)
 ├── code/
 │   ├── 01_use_case_1_eda.py            (End-to-End Pipeline & GLM Modeling)
-│   ├── 03_nlp_severity_baseline.py     (DistilBERT extraction)
-│   └── models/                         (Saved models and scalers)
-├── outputs/                            (Saved diagnostics and GLM coefficients)
+│   ├── 02_use_case_2_bi_simulation.py  (Vectorized Monte Carlo BI Simulator)
+│   ├── 03_nlp_severity_baseline.py     (DistilBERT NLP extraction pipeline)
+│   └── models/                         (Saved ML models and GLM parameters)
+├── outputs/                            
+│   ├── eda_visuals/                    (Saved diagnostics and HTML dashboards)
+│   └── model_outputs/                  (GLM coefficients and pricing indications)
 └── docs/                               (Documentation and planning notes)
 ```
