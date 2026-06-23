@@ -1,110 +1,71 @@
-# Maestro Cyber Pricing Models
+# Maestro Cyber Pricing Engine
 
-Welcome to the Maestro Cyber Risk & BI Pricing Engine repository. This project establishes an end-to-end data science and actuarial pipeline encompassing two primary use cases: **Frequency-Severity Pricing** and **Advanced Business Interruption (BI) Simulation**.
+Welcome to the Maestro Cyber Risk Dashboard repository. This project establishes an end-to-end data science and actuarial pipeline designed to dynamically price cyber insurance policies. 
 
-## 🚀 Live Streamlit Dashboards
-You can interact with the outputs, visualize risk patterns, and run live Monte Carlo simulations using the following Streamlit applications. 
+By combining traditional Actuarial Science with modern Machine Learning (XGBoost), Natural Language Processing (DistilBERT), and Generative AI (Google Gemini ADK), this engine provides highly accurate, transparent, and explainable pricing for complex cyber risks.
 
-To launch them, open your terminal in this repository and run the dynamic links below:
+## 🚀 Live Streamlit Dashboard
+You can interact with the outputs, visualize risk patterns, dynamically alter security controls, and chat with the AI Agent using the Streamlit application. 
 
-- **[Use Case 1: Frequency-Severity Pricing & EDA](http://localhost:8501)**
-  - Run command: `streamlit run app.py`
-- **[Use Case 2: Portfolio BI Explainer & AI Agent](http://localhost:8502)**
-  - Run command: `streamlit run app_2.py`
-
-*(Note: Click the dynamic links above once you have executed the respective run commands in your terminal.)*
+To launch the dashboard, open your terminal in this repository and run:
+```bash
+streamlit run app.py
+```
 
 ---
 
-## The End-to-End Pricing Journey
+## The End-to-End Pricing Journey: Step-by-Step
 
-### 1. Feature Engineering
-The foundation of the pricing engine starts with transforming raw, disparate data into a cohesive modeling dataset.
-- **Data Merging:** We combined policyholder details, security control scores (e.g., NIST), third-party vendor risk data, and historical claim events.
-- **Categorical & Numeric Transformations:** Categorical variables like `sub_sector` and `primary_regulator` were one-hot encoded to allow machine learning algorithms to interpret them.
-- **NLP Severity Extraction (DistilBERT):** To handle unstructured text from regulatory findings, we implemented a deep-learning `DistilBERT` pipeline. This model reads raw textual findings, converts them into high-dimensional vector embeddings, and uses a Random Forest classifier to output the probability of a "High Severity" finding. This probability (`high_sev_prob`) is injected back into the tabular data as a powerful engineered feature.
+### Step 1: Feature Engineering & NLP Extraction
+The foundation of the pricing engine starts with transforming raw, unstructured data into a cohesive modeling dataset. We moved beyond simple checkboxes to create sophisticated **Risk Indices**.
+- **Mathematical Merging:** We combined multiple security metrics (NIST scores, MFA deployment, EDR, and 24/7 SOC) into a single, cohesive **Cyber Control Score**. We similarly engineered a **Vendor Risk Pressure** index by calculating the ratio of third-party vendors to a company's internal security maturity.
+- **NLP Severity Extraction (DistilBERT):** To handle unstructured text from regulatory audits, we implemented a deep-learning Transformer pipeline (`DistilBERT`). This model reads raw textual findings, converts them into high-dimensional vector embeddings, and outputs the probability of a "High Severity" regulatory finding. This probability is injected back into the tabular data as a powerful predictive feature.
 
-### 2. Frequency & Severity Modeling (Use Case 1)
-With the engineered dataset ready, we predict the foundational components of insurance loss:
-- **How it is AI-Powered:** Instead of relying on rigid, linear traditional actuarial models, we use Machine Learning. Non-linear, tree-based models like Random Forest and XGBoost capture complex interactions (e.g., how the *combination* of a weak vendor score and missing multi-factor authentication exponentially increases risk). Additionally, we use NLP (DistilBERT) to dynamically read unstructured regulatory text and convert it into a numeric risk probability.
-- **Frequency (Probability of Claim):** Using algorithmic class weighting to combat the heavily imbalanced dataset (claims are rare), we trained multiple algorithms to predict the likelihood of an insured suffering a cyber event in a given year.
-- **Severity (Cost of Claim):** We mapped historical loss data against our features using a lognormal regression to determine the expected average severity if a claim does occur.
+### Step 2: The Machine Learning Benchmark (XGBoost)
+Before building our actuarial models, we deployed an optimized **XGBoost** algorithm to rigorously analyze historical loss patterns. 
+- Machine learning models like XGBoost are exceptional at finding non-linear, compounding risks (e.g., discovering how the *combination* of a weak vendor score and missing multi-factor authentication exponentially increases risk). 
+- We use XGBoost to benchmark the maximum possible predictive power of our dataset.
 
-#### Model Comparison Results
-We rigorously evaluated three predictive algorithms for the frequency model. The predictive strength was measured using AUROC (Area Under the Receiver Operating Characteristic curve). 
+### Step 3: The Actuarial GLM Engine (Poisson & Gamma)
+While XGBoost is highly predictive, it acts as a "black box," which is difficult to justify to insurance regulators. Therefore, for our core pricing engine, we transition to industry-standard **Actuarial Generalized Linear Models (GLMs)** to ensure absolute transparency.
+- **Frequency (Probability of Claim):** We trained a mathematically robust **Poisson Distribution GLM** to predict the exact likelihood of an insured suffering a cyber event in a given year.
+- **Severity (Cost of Claim):** We paired this with a **Gamma Distribution GLM** to model the expected financial loss (severity) if a claim does occur.
 
-Because severe cyber claims are highly imbalanced "rare events" (affecting only a small single-digit percentage of the portfolio), an AUROC of 0.60 to 0.70 is standard and highly valuable in Actuarial Pricing. We are not trying to precisely classify exactly *which* single company will be hacked (which would require >0.90 AUROC); we are just trying to prove that the AI can successfully separate "slightly higher risk" groups from "lower risk" groups better than random guessing.
+### Step 4: The Core Pricing Equation
+With our Actuarial GLMs trained, we can calculate the final price of the insurance policy.
+1. **Pure Premium:** The exact amount of money needed just to pay the expected claims.
+   - `Pure Premium = Poisson Frequency × Gamma Severity`
+2. **Technical Premium:** Pure premium alone cannot sustain an insurance business. We must add risk margins and expense loads to calculate the final price charged to the customer.
+   - `Technical Premium = Pure Premium / (1 - Expense Ratio - Risk Margin)`
 
-| Algorithm | AUROC | Actuarial Verdict |
-| :--- | :--- | :--- |
-| **Traditional GLM** | 0.5965 | Baseline performance. Cannot capture non-linear cyber risks. |
-| **Random Forest (AI)** | 0.6231 | Better predictive power. Captures interactions between security controls. |
-| **XGBoost (AI)** | **0.6434** | **Best performance.** Gradient boosting excels at finding subtle, sequential risk patterns. |
+**Dynamic Interactivity:** As you adjust security controls in the dashboard (like increasing MFA), the Poisson GLM instantly registers the lower risk, recalculates the probability, and the Technical Premium drops live on the screen!
 
-### SHAP Explainability (Opening the Black Box)
-Machine Learning models are traditionally "black boxes." To allow underwriters to actually trust the pricing engine, we implemented **SHAP (SHapley Additive exPlanations)**.
+### Step 5: Tail Risk & Systemic Catastrophes
+Deterministic GLMs calculate the "average" expected loss, but they fail to capture the extreme volatility of modern cyber threats (like a global cloud outage). To solve this, we evaluate the portfolio's historical total losses to identify **Tail Risk**.
+- We calculate the **95% Value at Risk (VaR)** and the **99% Tail Value at Risk (TVaR)**.
+- This ensures the portfolio holds enough capital reserves to survive systemic, catastrophic events.
 
-Based on Game Theory, SHAP calculates exactly how much each feature contributed to a company's final risk score. The Summary Plot below proves the AI is logically pricing the risk:
-- **Red dots (High Feature Value):** For features like `high_sev_rate` or `vendor_control_pressure`, red dots push the SHAP value to the right (increasing the risk of a claim).
-- **Blue dots (Low Feature Value):** For features like `cyber_control_score`, having a high score (red) pushes the risk to the left (lowering the premium).
-
-![SHAP Summary Plot](outputs/eda_visuals/shap_summary.png)
-
-### 3. Pure Premium Calculation & The Monte Carlo Engine (Use Case 2)
-The **Pure Premium** represents the exact amount of money needed just to pay the expected claims, with no profit built in.
-
-- **The Core Actuarial Formula:** `Pure Premium = Expected Frequency × Expected Severity`
-- **In Use Case 1:** We calculate this deterministically using the strict mathematical outputs of the machine learning models.
-
-However, deterministic models fail to capture the extreme volatility of modern cyber threats. To solve this, **Use Case 2** introduces a Stochastic Monte Carlo Engine to simulate the exact drivers of Business Interruption (BI) loss. Here is the step-by-step intuition behind the code in `02_use_case_2_bi_simulation.py`:
-
-#### Step 1: 50,000 Parallel Universes
-Instead of looking at the "average" year, the `numpy`-powered engine simulates 50,000 potential future years for *every single policy*.
-
-#### Step 2: Simulating Attacks (Frequency via Poisson)
-For each of the 50,000 years, the engine rolls a mathematical dice using a **Poisson Distribution**. The `lambda` (mean) of this distribution is the AI-predicted frequency from Use Case 1. This determines exactly how many attacks (0, 1, or 2+) hit the company in that specific simulated year.
-
-#### Step 3: Simulating BI Loss & The Vendor Pressure Threat (Severity)
-If an attack occurs in a simulated year, the engine calculates the financial damage. We specifically focus on **Business Interruption (BI)**, calculating `Downtime Days × Daily Revenue`.
-- **The Normal Scenario:** The engine draws downtime days from a standard Lognormal distribution.
-- **The Vendor Pressure Threat:** How does Use Case 2 explain massive BI losses? It is based specifically on `vendor_control_pressure` and `regulatory_findings_pressure`. If a company has poor third-party vendor controls, the engine mathematically shifts the simulation into a **Bimodal Gaussian Mixture Distribution**. This simulates a "systemic" supply-chain ransomware event (e.g., an IT vendor gets hacked, taking down the policyholder's entire network). This bimodal shift drastically increases the simulated downtime days from a standard 3-5 days to 14-30+ days, causing the BI loss to explode.
-
-#### Step 4: Finding the Catastrophic Tail Risk (TVaR 99%)
-After simulating 50,000 years, we have a massive spectrum of possible financial outcomes.
-- We calculate the **Mean** of all 50,000 years to get our **Simulated Pure Premium**.
-- We isolate the absolute worst 500 years (the top 1%). The average loss of those worst 500 years is our **TVaR 99% (Tail Value at Risk)**.
-
-### 4. Advanced Actuarial Risk Margin & Capital Reserving
-Because the Pure Premium only covers the *average* expectation, an insurance company must hold massive cash reserves to survive the extreme tail events identified by the Monte Carlo simulator.
-
-- **Required Capital:** To survive the worst-case scenario, the company must hold `TVaR_99 - Simulated Pure Premium` in cash reserves.
-- **Risk Load Calculation:** Holding cash costs money. Investors demand a return on capital (e.g., a 10% Cost of Capital). Therefore, our engine calculates the dynamic **Risk Load** as `Required Capital × 10%`.
-- Companies with severe Vendor Pressure will have massive TVaR 99% spikes, resulting in massive Risk Loads. Highly secure companies receive a tiny risk load.
-
-### 5. Technical Premium Derivation
-The final **Technical Premium** is the actual price required to confidently underwrite the policy while paying for all operational expenses.
-- **Formula:** `(Pure Premium + Risk Load) / (1 - Expense Ratio)`
-- **Components:**
-  - *Pure Premium:* Pays the expected claims.
-  - *Risk Load:* Pays the shareholders/investors for risking their capital on catastrophic tail events.
-  - *Expense Ratio (e.g. 25%):* Pays the broker commissions, underwriters, and company overhead.
-
-The result is a hyper-accurate, AI-driven, risk-adjusted technical premium that correctly prices modern cyber risk!
+### Step 6: Google Gemini ADK Agent Explainability
+Finally, we don't just calculate the price; we explain it. We integrated a **Google Gemini ADK Agent** directly into the dashboard interface.
+- Instead of underwriters guessing why a premium spiked, the Agent reads the exact mathematical GLM coefficients in the background.
+- It instantly translates the complex math into clear, plain-English pricing logic, empowering underwriters to confidently explain and defend the premium to brokers and clients.
 
 ---
 
 ## Developer Quick Start
 
 ```bash
-# Set up environment
+# 1. Set up environment
 python -m venv venv
 source venv/bin/activate            # Windows: venv\Scripts\activate
 pip install -r requirements.txt
 
-# Run the three core scripts
+# 2. Run the foundational scripts to generate features and GLM coefficients
 python code/01_use_case_1_eda.py
 python code/03_nlp_severity_baseline.py
-python code/02_use_case_2_bi_simulation.py
+
+# 3. Launch the Application
+streamlit run app.py
 ```
 
 ## Repository Layout
@@ -112,14 +73,12 @@ python code/02_use_case_2_bi_simulation.py
 maestro_cyber/
 ├── README.md                           (this file)
 ├── requirements.txt
-├── app.py                              (Streamlit Dashboard for Use Case 1)
-├── app_2.py                            (Streamlit Dashboard for Use Case 2: Portfolio AI Explainer)
+├── app.py                              (Streamlit Dashboard - Main Application)
 ├── data/                               (Mock datasets and output features)
 ├── code/
-│   ├── 01_use_case_1_eda.py            (End-to-End Pipeline & Modeling)
-│   ├── 02_use_case_2_bi_simulation.py  (Actuarial Monte Carlo Engine)
+│   ├── 01_use_case_1_eda.py            (End-to-End Pipeline & GLM Modeling)
 │   ├── 03_nlp_severity_baseline.py     (DistilBERT extraction)
-│   └── models/                         (Saved joblib baseline models)
-├── outputs/                            (Saved EDA visuals and diagnostics)
+│   └── models/                         (Saved models and scalers)
+├── outputs/                            (Saved diagnostics and GLM coefficients)
 └── docs/                               (Documentation and planning notes)
 ```
