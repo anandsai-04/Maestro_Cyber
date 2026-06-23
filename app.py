@@ -3,9 +3,8 @@ import pandas as pd
 import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
-from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
-from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import roc_auc_score
+from sklearn.linear_model import PoissonRegressor, GammaRegressor
+from sklearn.metrics import mean_poisson_deviance, mean_gamma_deviance
 from pathlib import Path
 
 try:
@@ -120,9 +119,9 @@ if df is None:
     st.stop()
 
 # ==========================================
-# MACHINE LEARNING ENGINE (TRAINED ON FLY)
+# ACTUARIAL GLM ENGINE (TRAINED ON FLY)
 # ==========================================
-# We train the Random Forest directly in Streamlit to enable 100% dynamic user-input pricing
+# We train the GLMs directly in Streamlit to enable 100% dynamic user-input pricing
 categorical_cols = ["sub_sector", "cloud_provider_primary"]
 numeric_cols = [
     "exposure_size_score", "cyber_control_score", "control_gap_score", 
@@ -138,24 +137,24 @@ features_list = X.columns.tolist()
 y_freq = df["had_claim"]
 severity_mask = df["total_loss"] > 0
 X_sev = X[severity_mask]
-y_sev = np.log1p(df[severity_mask]["total_loss"])
+y_sev = df[severity_mask]["total_loss"] # Gamma Regressor takes raw positive target, no log1p needed
 
-# Train Frequency Model (Random Forest & GLM for comparison)
-rf_freq = RandomForestClassifier(n_estimators=100, max_depth=6, random_state=42)
-rf_freq.fit(X, y_freq)
-
-glm_freq = LogisticRegression(max_iter=1000)
+# Train Frequency Model (Poisson GLM)
+glm_freq = PoissonRegressor(alpha=0.1, max_iter=1000)
 glm_freq.fit(X, y_freq)
 
-# Train Severity Model (Random Forest)
-rf_sev = RandomForestRegressor(n_estimators=100, max_depth=6, random_state=42)
-rf_sev.fit(X_sev, y_sev)
+# Train Severity Model (Gamma GLM)
+glm_sev = GammaRegressor(alpha=0.1, max_iter=1000)
+glm_sev.fit(X_sev, y_sev)
 
-# Calculate AUC
-df["rf_prob"] = rf_freq.predict_proba(X)[:, 1]
-df["glm_prob"] = glm_freq.predict_proba(X)[:, 1]
-rf_auc = roc_auc_score(y_freq, df["rf_prob"])
-glm_auc = roc_auc_score(y_freq, df["glm_prob"])
+# Extract Coefficients for Agent
+coef_df = pd.DataFrame({
+    'Feature': features_list,
+    'Frequency_Coef': glm_freq.coef_,
+    'Severity_Coef': glm_sev.coef_
+})
+# Export so the Agent can read it
+coef_df.to_csv("outputs/model_outputs/glm_coefficients.csv", index=False)
 
 
 # ==========================================
@@ -217,31 +216,31 @@ with tab_agent:
     if api_key:
         client = genai.Client(api_key=api_key)
         
-        # Load SHAP global feature importances
+        # Load GLM Coefficients instead of SHAP
         try:
-            shap_df = pd.read_csv("outputs/model_outputs/shap_importances.csv")
-            shap_importances = shap_df.set_index('Feature')['SHAP_Importance'].to_dict()
+            coef_df = pd.read_csv("outputs/model_outputs/glm_coefficients.csv")
+            glm_coefficients = coef_df.to_dict(orient="records")
         except FileNotFoundError:
-            shap_importances = {"Error": "SHAP importances not generated yet."}
+            glm_coefficients = {"Error": "GLM coefficients not generated yet."}
             
         stats = {
             "avg_loss_ratio": df['loss_ratio'].mean() if 'loss_ratio' in df.columns else None,
             "avg_bi_loss": df['bi_loss'].mean() if 'bi_loss' in df.columns else None,
-            "AI_SHAP_Feature_Importances": shap_importances
+            "GLM_Coefficients": glm_coefficients
         }
         
         if "agent_report_app1" not in st.session_state:
-            with st.spinner("Agent is analyzing deterministic stats and SHAP importances..."):
+            with st.spinner("Agent is analyzing deterministic stats and GLM Coefficients..."):
                 prompt = f"""
                 You are an expert Chief Actuary reviewing a cyber insurance portfolio. 
-                Crucially, I have included the SHAP Feature Importances from the XGBoost pricing engine.
+                Crucially, I have included the exact mathematical GLM Coefficients (Poisson Frequency and Gamma Severity) from the pricing engine.
                 
-                Here are the statistical effects and SHAP importances:
+                Here are the statistical effects and GLM Coefficients:
                 {stats}
                 
                 Write a concise executive report for the underwriters. 
                 Explicitly study and explain the effect of Vendor Control Pressure, Regulatory Findings, and Cyber Control Score on BI Loss.
-                **CRITICAL:** Explicitly use the AI_SHAP_Feature_Importances to explain *why* the AI Pricing Engine cares about certain features over others, relating directly to the visualizations they see on the screen.
+                **CRITICAL:** Explicitly use the GLM_Coefficients to explain *why* the Actuarial Pricing Engine cares about certain features over others, relating directly to the visualizations they see on the screen.
                 """
                 
                 try:
@@ -361,7 +360,7 @@ with tab_features:
 # ------------------------------------------
 with tab_calc:
     st.markdown("### Dynamically Price a New Policy Profile")
-    st.write("Adjust the features below. The Random Forest AI will calculate expected frequency, severity, and premium on the fly.")
+    st.write("Adjust the features below. The Actuarial GLM will calculate expected frequency, severity, and premium on the fly.")
     
     col_in1, col_in2, col_in3 = st.columns(3)
     
@@ -449,9 +448,8 @@ with tab_calc:
     input_array = [input_dict.get(f, 0) for f in features_list]
     input_df = pd.DataFrame([input_array], columns=features_list)
     
-    pred_freq = rf_freq.predict_proba(input_df)[0][1]
-    pred_log_sev = rf_sev.predict(input_df)[0]
-    pred_sev = np.expm1(pred_log_sev)
+    pred_freq = glm_freq.predict(input_df)[0]
+    pred_sev = glm_sev.predict(input_df)[0]
     
     pure_premium = pred_freq * pred_sev
     tech_premium = pure_premium / (1 - 0.25 - 0.20)
@@ -477,14 +475,23 @@ with tab_models:
     m_col1, m_col2 = st.columns(2)
     
     with m_col1:
-        st.subheader("Why Random Forest beats GLM")
-        comp_df = pd.DataFrame({
-            "Model": ["GLM (Logistic)", "Random Forest (AI)"],
-            "AUC-ROC Score": [glm_auc, rf_auc]
-        })
-        fig_comp = px.bar(comp_df, x="Model", y="AUC-ROC Score", color="Model", text_auto='.3f',
-                          color_discrete_sequence=["#555555", "#00d2ff"])
-        st.plotly_chart(fig_comp, use_container_width=True)
+        st.subheader("GLM Mathematical Coefficients")
+        st.write("This shows the exact mathematical weights (coefficients) assigned to each feature by the Poisson and Gamma GLMs.")
+        try:
+            c_df = pd.read_csv("outputs/model_outputs/glm_coefficients.csv")
+            # Create a combined visualization of Frequency vs Severity coefficients
+            # We sort by Frequency Coef absolute magnitude for readability
+            c_df['Abs_Freq'] = c_df['Frequency_Coef'].abs()
+            c_df = c_df.sort_values(by='Abs_Freq', ascending=False).head(10)
+            
+            fig_coef = go.Figure(data=[
+                go.Bar(name='Freq (Poisson)', x=c_df['Feature'], y=c_df['Frequency_Coef']),
+                go.Bar(name='Sev (Gamma)', x=c_df['Feature'], y=c_df['Severity_Coef'])
+            ])
+            fig_coef.update_layout(barmode='group', title="Top 10 GLM Weights")
+            st.plotly_chart(fig_coef, use_container_width=True)
+        except Exception as e:
+            st.warning("GLM Coefficients not available yet. Please interact with the Pricing Engine first.")
         
     with m_col2:
         st.subheader("Value at Risk (VaR) & TVaR")

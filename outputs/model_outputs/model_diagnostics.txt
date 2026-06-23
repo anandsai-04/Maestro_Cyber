@@ -13,21 +13,20 @@ Target: had_claim
 Diagnostic action threshold: 0.20
 Train claim rate: 0.1764
 Test claim rate: 0.1388
-Average test predicted probability: 0.1834
-Train accuracy: 0.9973
-Train precision: 0.9849
-Train recall: 1.0000
-Test accuracy: 0.6298
-Test precision: 0.2000
-Test recall: 0.5556
+Average test predicted probability: 0.1734
+Train accuracy: 0.6949
+Train precision: 0.2773
+Train recall: 0.4541
+Test accuracy: 0.7147
+Test precision: 0.2233
+Test recall: 0.4259
 
 Severity model
 --------------
-Model: lognormal severity model on positive-loss claims, implemented with ridge least squares.
+Model: Actuarial Gamma GLM severity model on positive-loss claims.
 Target: total_loss where total_loss > 0
 Positive-loss train rows: 196
-Lognormal residual sigma: 1.6130
-Positive-claim severity MAE on test: 3,520,936.33
+Positive-claim severity MAE on test: 2,647,839.68
 
 Pricing formula
 ---------------
@@ -46,8 +45,8 @@ Total load: 55%
 Portfolio averages
 ------------------
 Average current premium: 15,998,649.64
-Average pure premium: 466,495.66
-Average technical premium template: 1,036,657.03
+Average pure premium: 277,206.89
+Average technical premium template: 616,015.30
 
 Important caution
 -----------------

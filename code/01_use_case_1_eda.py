@@ -594,98 +594,46 @@ def run_frequency_severity_template(df: pd.DataFrame) -> pd.DataFrame:
     y_train = train["had_claim"].to_numpy(dtype=float)
     y_test = test["had_claim"].to_numpy(dtype=float)
 
-    freq_weights = fit_logistic_regression(x_train, y_train)
-    with np.errstate(over="ignore", divide="ignore", invalid="ignore"):
-        train_freq_glm = sigmoid(x_train @ freq_weights)
-        test_freq_glm = sigmoid(x_test @ freq_weights)
-        all_freq_glm = sigmoid(x_all @ freq_weights)
-
-    from sklearn.ensemble import RandomForestClassifier, HistGradientBoostingClassifier
-    from sklearn.metrics import classification_report, roc_auc_score, recall_score, f1_score
+    from sklearn.linear_model import PoissonRegressor, GammaRegressor
+    from sklearn.metrics import mean_poisson_deviance, mean_gamma_deviance
     
-    # Train Random Forest
-    rf = RandomForestClassifier(n_estimators=100, random_state=42)
-    rf.fit(x_train, y_train)
+    # Train Frequency GLM (Poisson)
+    print("\n[Actuarial GLM Frequency Model - Poisson]")
+    freq_glm = PoissonRegressor(alpha=0.1, max_iter=1000)
+    freq_glm.fit(x_train, y_train)
     
-    train_freq_rf = rf.predict_proba(x_train)[:, 1]
-    test_freq_rf = rf.predict_proba(x_test)[:, 1]
-    all_freq_rf = rf.predict_proba(x_all)[:, 1]
+    train_freq = freq_glm.predict(x_train)
+    test_freq = freq_glm.predict(x_test)
+    all_freq = freq_glm.predict(x_all)
     
-    # Train XGBoost equivalent (HistGradientBoosting)
-    xgb = HistGradientBoostingClassifier(learning_rate=0.05, max_depth=4, random_state=42)
-    xgb.fit(x_train, y_train)
-
-    train_freq_xgb = xgb.predict_proba(x_train)[:, 1]
-    test_freq_xgb = xgb.predict_proba(x_test)[:, 1]
-    all_freq_xgb = xgb.predict_proba(x_all)[:, 1]
-    
-    print("\n[GLM Baseline Frequency Metrics]")
-    print(f"GLM AUC-ROC: {roc_auc_score(y_test, test_freq_glm):.4f}")
-
-    print("\n[AI-Powered Random Forest Frequency Metrics]")
-    print(f"RF AUC-ROC: {roc_auc_score(y_test, test_freq_rf):.4f}")
-    
-    print("\n[AI-Powered XGBoost Frequency Metrics]")
-    print(f"XGB AUC-ROC: {roc_auc_score(y_test, test_freq_xgb):.4f}")
-    
-    # SHAP Analysis
-    import shap
-    import matplotlib.pyplot as plt
-    print("\nGenerating SHAP Explanations...")
-    # Create DataFrame for SHAP to have proper labels
-    x_train_df = pd.DataFrame(x_train, columns=feature_names)
-    
-    # Random Forest is natively supported by TreeExplainer
-    explainer = shap.TreeExplainer(rf)
-    shap_values = explainer.shap_values(x_train_df)
-    
-    # For RandomForestClassifier, shap_values is a list: [shap_values_for_class_0, shap_values_for_class_1]
-    # We want explanations for predicting a Claim (class 1)
-    if isinstance(shap_values, list):
-        shap_vals_class1 = shap_values[1]
-    else:
-        shap_vals_class1 = shap_values
-        
-    plt.figure(figsize=(10, 8))
-    shap.summary_plot(shap_vals_class1, x_train_df, show=False)
-    plt.tight_layout()
-    plt.savefig(VIS_DIR / "shap_summary.png", dpi=300, bbox_inches='tight')
-    plt.close()
-    
-    # Extract mean absolute SHAP values for LLM Agent
-    if hasattr(shap_vals_class1, "values"):
-        vals = np.abs(shap_vals_class1.values).mean(axis=0)
-    else:
-        vals = np.abs(shap_vals_class1).mean(axis=0)
-        
-    vals = np.array(vals).flatten()
-        
-    shap_importance = pd.DataFrame(list(zip(feature_names, vals)), columns=['Feature', 'SHAP_Importance'])
-    shap_importance.sort_values(by=['SHAP_Importance'], ascending=False, inplace=True)
-    shap_importance.to_csv(MODEL_DIR / "shap_importances.csv", index=False)
-    
-    all_freq = all_freq_xgb
-    train_freq = train_freq_xgb
-    test_freq = test_freq_xgb
+    # Extract Frequency Coefficients
+    freq_coef = pd.DataFrame(list(zip(feature_names, freq_glm.coef_)), columns=['Feature', 'Frequency_Coef'])
 
     severity_train = train.loc[train["total_loss"] > 0].reset_index(drop=True)
     x_sev_train, sev_feature_names, severity_scaler = build_design_matrix(
         severity_train,
         fit_columns=feature_names[1:],
     )
-    severity_weights, severity_sigma = fit_lognormal_severity(
-        x_sev_train,
-        severity_train["total_loss"].to_numpy(dtype=float),
-    )
+    
+    y_sev_train = severity_train["total_loss"].to_numpy(dtype=float)
+    
+    print("\n[Actuarial GLM Severity Model - Gamma]")
+    sev_glm = GammaRegressor(alpha=0.1, max_iter=1000)
+    sev_glm.fit(x_sev_train, y_sev_train)
+    
+    # Extract Severity Coefficients
+    sev_coef = pd.DataFrame(list(zip(sev_feature_names, sev_glm.coef_)), columns=['Feature', 'Severity_Coef'])
+    
+    # Merge and Save Coefficients for the App
+    coef_df = pd.merge(freq_coef, sev_coef, on='Feature', how='outer').fillna(0)
+    coef_df.to_csv(MODEL_DIR / "glm_coefficients.csv", index=False)
 
     x_all_severity, _, _ = build_design_matrix(
         df,
         fit_columns=sev_feature_names[1:],
         scaler=severity_scaler,
     )
-    with np.errstate(over="ignore", divide="ignore", invalid="ignore"):
-        all_sev_mu = x_all_severity @ severity_weights
-        all_expected_severity = np.maximum(np.expm1(all_sev_mu + 0.5 * severity_sigma**2), 0.0)
+    all_expected_severity = sev_glm.predict(x_all_severity)
 
     test_positive = test["total_loss"] > 0
     if test_positive.any():
@@ -694,8 +642,7 @@ def run_frequency_severity_template(df: pd.DataFrame) -> pd.DataFrame:
             fit_columns=sev_feature_names[1:],
             scaler=severity_scaler,
         )
-        with np.errstate(over="ignore", divide="ignore", invalid="ignore"):
-            sev_test_pred = np.maximum(np.expm1(x_sev_test @ severity_weights + 0.5 * severity_sigma**2), 0.0)
+        sev_test_pred = sev_glm.predict(x_sev_test)
         sev_mae = float(np.mean(np.abs(test.loc[test_positive, "total_loss"].to_numpy(dtype=float) - sev_test_pred)))
     else:
         sev_mae = np.nan
@@ -784,10 +731,9 @@ Test recall: {test_metrics['recall']:.4f}
 
 Severity model
 --------------
-Model: lognormal severity model on positive-loss claims, implemented with ridge least squares.
+Model: Actuarial Gamma GLM severity model on positive-loss claims.
 Target: total_loss where total_loss > 0
 Positive-loss train rows: {len(severity_train):,}
-Lognormal residual sigma: {severity_sigma:.4f}
 Positive-claim severity MAE on test: {sev_mae:,.2f}
 
 Pricing formula
@@ -832,12 +778,8 @@ and separate BI frequency/severity logic before using indications commercially.
     export_dir = ROOT / "code" / "models"
     export_dir.mkdir(parents=True, exist_ok=True)
     
-    joblib.dump(xgb, export_dir / "rf_freq_model.joblib")
-    np.save(export_dir / "glm_freq_weights.npy", freq_weights)
-    np.save(export_dir / "sev_weights.npy", severity_weights)
-    
-    # Save severity sigma as a simple text/json or single value array
-    np.save(export_dir / "sev_sigma.npy", np.array([severity_sigma]))
+    joblib.dump(freq_glm, export_dir / "freq_glm_model.joblib")
+    joblib.dump(sev_glm, export_dir / "sev_glm_model.joblib")
     
     joblib.dump(train_scaler, export_dir / "model_scaler.joblib")
     
