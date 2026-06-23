@@ -620,25 +620,49 @@ def run_frequency_severity_template(df: pd.DataFrame) -> pd.DataFrame:
     all_freq_xgb = xgb.predict_proba(x_all)[:, 1]
     
     print("\n[GLM Baseline Frequency Metrics]")
-    glm_preds = (test_freq_glm > 0.5).astype(int)
-    print(classification_report(y_test, glm_preds))
     print(f"GLM AUC-ROC: {roc_auc_score(y_test, test_freq_glm):.4f}")
-    print(f"GLM Recall:  {recall_score(y_test, glm_preds):.4f}")
-    print(f"GLM F1:      {f1_score(y_test, glm_preds):.4f}")
 
     print("\n[AI-Powered Random Forest Frequency Metrics]")
-    rf_preds = (test_freq_rf > 0.5).astype(int)
-    print(classification_report(y_test, rf_preds))
     print(f"RF AUC-ROC: {roc_auc_score(y_test, test_freq_rf):.4f}")
-    print(f"RF Recall:  {recall_score(y_test, rf_preds):.4f}")
-    print(f"RF F1:      {f1_score(y_test, rf_preds):.4f}")
     
     print("\n[AI-Powered XGBoost Frequency Metrics]")
-    xgb_preds = (test_freq_xgb > 0.5).astype(int)
-    print(classification_report(y_test, xgb_preds))
     print(f"XGB AUC-ROC: {roc_auc_score(y_test, test_freq_xgb):.4f}")
-    print(f"XGB Recall:  {recall_score(y_test, xgb_preds):.4f}")
-    print(f"XGB F1:      {f1_score(y_test, xgb_preds):.4f}")
+    
+    # SHAP Analysis
+    import shap
+    import matplotlib.pyplot as plt
+    print("\nGenerating SHAP Explanations...")
+    # Create DataFrame for SHAP to have proper labels
+    x_train_df = pd.DataFrame(x_train, columns=feature_names)
+    
+    # Random Forest is natively supported by TreeExplainer
+    explainer = shap.TreeExplainer(rf)
+    shap_values = explainer.shap_values(x_train_df)
+    
+    # For RandomForestClassifier, shap_values is a list: [shap_values_for_class_0, shap_values_for_class_1]
+    # We want explanations for predicting a Claim (class 1)
+    if isinstance(shap_values, list):
+        shap_vals_class1 = shap_values[1]
+    else:
+        shap_vals_class1 = shap_values
+        
+    plt.figure(figsize=(10, 8))
+    shap.summary_plot(shap_vals_class1, x_train_df, show=False)
+    plt.tight_layout()
+    plt.savefig(VIS_DIR / "shap_summary.png", dpi=300, bbox_inches='tight')
+    plt.close()
+    
+    # Extract mean absolute SHAP values for LLM Agent
+    if hasattr(shap_vals_class1, "values"):
+        vals = np.abs(shap_vals_class1.values).mean(axis=0)
+    else:
+        vals = np.abs(shap_vals_class1).mean(axis=0)
+        
+    vals = np.array(vals).flatten()
+        
+    shap_importance = pd.DataFrame(list(zip(feature_names, vals)), columns=['Feature', 'SHAP_Importance'])
+    shap_importance.sort_values(by=['SHAP_Importance'], ascending=False, inplace=True)
+    shap_importance.to_csv(MODEL_DIR / "shap_importances.csv", index=False)
     
     all_freq = all_freq_xgb
     train_freq = train_freq_xgb

@@ -51,6 +51,13 @@ def load_data():
         "total_policies": len(df)
     }
     
+    # Load SHAP global feature importances
+    try:
+        shap_df = pd.read_csv("outputs/model_outputs/shap_importances.csv")
+        shap_importances = shap_df.set_index('Feature')['SHAP_Importance'].to_dict()
+    except FileNotFoundError:
+        shap_importances = {"Error": "SHAP importances not generated yet."}
+    
     # Condense stats for LLM
     condensed_stats = {
         "overall": overall,
@@ -60,7 +67,8 @@ def load_data():
         "vendor_pressure_impact": vendor_band_stats,
         "sector_impact": sector_stats,
         "cloud_provider_impact": cloud_stats,
-        "core_banking_vendor_impact": core_banking_stats
+        "core_banking_vendor_impact": core_banking_stats,
+        "AI_SHAP_Feature_Importances": shap_importances
     }
     
     return df, condensed_stats
@@ -97,11 +105,13 @@ with tab1:
             
             # Auto-generate report if not in session state
             if "agent_report" not in st.session_state:
-                with st.spinner("Agent is analyzing deterministic stats..."):
+                with st.spinner("Agent is analyzing deterministic stats and SHAP importances..."):
                     prompt = f"""
                     You are an expert Chief Actuary reviewing a cyber insurance portfolio. 
                     I have already run the heavy deterministic calculations to save your tokens. 
-                    Here are the statistical effects of various features on BI Loss, Loss Ratio, Frequency (n_claims), and Severity:
+                    Crucially, I have also included the SHAP Feature Importances from the XGBoost pricing engine.
+                    
+                    Here are the statistical effects and SHAP importances:
                     
                     {stats}
                     
@@ -115,6 +125,7 @@ with tab1:
                     6. Limit to Revenue and Prior Incidents
                     
                     Explain how severely these factors affect BI Loss and Loss Ratio. Compare Loss Ratio to the BI share of loss ratio.
+                    **CRITICAL:** Explicitly use the AI_SHAP_Feature_Importances to explain *why* the AI Pricing Engine cares about certain features over others.
                     """
                     
                     response = client.models.generate_content(
