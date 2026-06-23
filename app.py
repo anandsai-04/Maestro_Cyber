@@ -4,7 +4,8 @@ import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
 from sklearn.linear_model import PoissonRegressor, GammaRegressor
-from sklearn.metrics import mean_poisson_deviance, mean_gamma_deviance
+from sklearn.ensemble import HistGradientBoostingClassifier
+from sklearn.metrics import mean_poisson_deviance, mean_gamma_deviance, roc_auc_score
 from pathlib import Path
 
 try:
@@ -146,6 +147,14 @@ glm_freq.fit(X, y_freq)
 # Train Severity Model (Gamma GLM)
 glm_sev = GammaRegressor(alpha=0.1, max_iter=1000)
 glm_sev.fit(X_sev, y_sev)
+
+# Train XGBoost Frequency Model (For Comparison Only)
+xgb_freq = HistGradientBoostingClassifier(learning_rate=0.05, max_depth=4, random_state=42)
+xgb_freq.fit(X, y_freq)
+
+# Calculate AUC-ROC for comparison
+glm_auc = roc_auc_score(y_freq, glm_freq.predict(X))
+xgb_auc = roc_auc_score(y_freq, xgb_freq.predict_proba(X)[:, 1])
 
 # Extract Coefficients for Agent
 coef_df = pd.DataFrame({
@@ -475,6 +484,18 @@ with tab_models:
     m_col1, m_col2 = st.columns(2)
     
     with m_col1:
+        st.subheader("Model Comparison: GLM vs XGBoost")
+        st.write("We train a tuned **XGBoost** model alongside the **Actuarial GLM**. While XGBoost captures non-linear interactions better (higher AUC), we explicitly use the GLM for the final Technical Premium pricing to maintain regulatory transparency.")
+        
+        # Display AUC Comparison
+        auc_df = pd.DataFrame({
+            "Model": ["Actuarial GLM (Poisson)", "XGBoost (HistGradientBoosting)"],
+            "AUC-ROC Score": [glm_auc, xgb_auc]
+        })
+        fig_auc = px.bar(auc_df, x="Model", y="AUC-ROC Score", color="Model", title="Frequency Model Predictive Power", text_auto=".3f")
+        fig_auc.update_layout(yaxis_range=[0.5, 1.0])
+        st.plotly_chart(fig_auc, use_container_width=True)
+
         st.subheader("GLM Mathematical Coefficients")
         st.write("This shows the exact mathematical weights (coefficients) assigned to each feature by the Poisson and Gamma GLMs.")
         try:
