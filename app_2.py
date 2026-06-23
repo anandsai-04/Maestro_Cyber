@@ -4,7 +4,76 @@ import numpy as np
 import plotly.express as px
 import os
 
-st.set_page_config(page_title="Portfolio BI Analytics", layout="wide", page_icon="📊")
+st.set_page_config(page_title="Portfolio BI Analytics", layout="wide", page_icon="📈")
+
+# Premium Glassmorphism CSS & Modern Typography
+st.markdown("""
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600&display=swap');
+    
+    html, body, [class*="css"]  {
+        font-family: 'Outfit', sans-serif;
+    }
+    
+    .stApp {
+        background: linear-gradient(135deg, #0f172a, #1e1b4b);
+        color: #e2e8f0;
+    }
+    
+    h1, h2, h3 {
+        background: -webkit-linear-gradient(45deg, #38bdf8, #a855f7);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        font-weight: 600;
+    }
+    
+    /* Glassmorphism Cards */
+    .glass-card {
+        background: rgba(255, 255, 255, 0.05);
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+        border-radius: 16px;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        padding: 20px;
+        margin: 10px 0;
+        box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+        transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+    
+    .glass-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 8px 40px rgba(0, 0, 0, 0.3);
+    }
+    
+    .metric-value {
+        font-size: 2rem;
+        font-weight: bold;
+        color: #38bdf8;
+    }
+    
+    .metric-title {
+        font-size: 0.9rem;
+        color: #94a3b8;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+    }
+    
+    /* Chat bubbles styling */
+    .stChatMessage {
+        background: rgba(255, 255, 255, 0.03) !important;
+        border-radius: 15px !important;
+        border: 1px solid rgba(255,255,255,0.05) !important;
+    }
+    
+    /* Input fields */
+    .stTextInput input {
+        background: rgba(0,0,0,0.2) !important;
+        border: 1px solid rgba(255,255,255,0.1) !important;
+        color: white !important;
+        border-radius: 8px !important;
+    }
+</style>
+""", unsafe_allow_html=True)
 
 # Ensure required libraries
 try:
@@ -75,7 +144,8 @@ def load_data():
 
 df, stats = load_data()
 
-st.title("📊 Portfolio Risk & BI Loss Analytics")
+st.title("🛡️ Use Case 2: AI Portfolio & BI Explainer")
+st.markdown("*Premium Analytics Engine with Gemini ADK Integration*")
 
 tab1, tab2 = st.tabs(["🤖 AI Portfolio Overview", "🧬 Feature Derivation Explainer"])
 
@@ -83,19 +153,42 @@ tab1, tab2 = st.tabs(["🤖 AI Portfolio Overview", "🧬 Feature Derivation Exp
 # Tab 1: Overview & Agent Chat
 # ============================================================
 with tab1:
+    
+    st.markdown(f"""
+    <div class="glass-card" style="display: flex; justify-content: space-around;">
+        <div>
+            <div class="metric-title">Total Policies</div>
+            <div class="metric-value">{stats['overall']['total_policies']:,}</div>
+        </div>
+        <div>
+            <div class="metric-title">Avg Loss Ratio</div>
+            <div class="metric-value">{stats['overall']['avg_loss_ratio']:.2%}</div>
+        </div>
+        <div>
+            <div class="metric-title">Avg BI Share</div>
+            <div class="metric-value">{stats['overall']['avg_bi_share_of_loss']:.2%}</div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+    
     col1, col2 = st.columns([1, 1])
     
     with col1:
+        st.markdown('<div class="glass-card">', unsafe_allow_html=True)
         st.subheader("Data Visualizations")
-        fig_lr = px.box(df, x='vendor_pressure_band', y='loss_ratio', color='primary_regulator', title="Loss Ratio by Vendor Pressure & Regulator")
+        fig_lr = px.box(df, x='vendor_pressure_band', y='loss_ratio', color='primary_regulator', 
+                        title="Loss Ratio by Vendor Pressure", template="plotly_dark")
+        fig_lr.update_layout(paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
         st.plotly_chart(fig_lr, use_container_width=True)
         
-        fig_bi = px.scatter(df, x='cyber_control_score', y='bi_loss', size='premium_usd', color='vendor_pressure_band', title="BI Loss vs Cyber Control Score")
+        fig_bi = px.scatter(df, x='cyber_control_score', y='bi_loss', size='premium_usd', color='vendor_pressure_band', 
+                            title="BI Loss vs Cyber Control Score", template="plotly_dark")
+        fig_bi.update_layout(paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
         st.plotly_chart(fig_bi, use_container_width=True)
-        
-        st.markdown(f"**Total Policies:** {stats['overall']['total_policies']:,} | **Avg Loss Ratio:** {stats['overall']['avg_loss_ratio']:.2%} | **Avg BI Share:** {stats['overall']['avg_bi_share_of_loss']:.2%}")
+        st.markdown('</div>', unsafe_allow_html=True)
 
     with col2:
+        st.markdown('<div class="glass-card">', unsafe_allow_html=True)
         st.subheader("🤖 AI Actuarial Report")
         
         api_key = st.text_input("Enter Gemini API Key to run Agent:", type="password", key="agent_key")
@@ -143,9 +236,11 @@ with tab1:
             
         else:
             st.info("Provide API key to automatically generate the AI report.")
+        
+        st.markdown('</div>', unsafe_allow_html=True)
 
     # Chat interface at the bottom
-    st.markdown("---")
+    st.markdown('<div class="glass-card">', unsafe_allow_html=True)
     st.subheader("💬 Chat with the Actuarial Agent")
     
     if api_key and "messages" in st.session_state:
@@ -172,12 +267,15 @@ with tab1:
             st.session_state.messages.append({"role": "model", "content": response.text})
     elif not api_key:
         st.warning("API key required to use the chat functionality.")
+    
+    st.markdown('</div>', unsafe_allow_html=True)
 
 
 # ============================================================
 # Tab 2: Feature Engineering Explainer
 # ============================================================
 with tab2:
+    st.markdown('<div class="glass-card">', unsafe_allow_html=True)
     st.header("🧬 How We Derived the Features")
     
     st.markdown("### 1. Merged Features (Mathematical Engineering)")
@@ -197,3 +295,4 @@ with tab2:
     * **`high_sev_rate`:** DistilBERT reads the raw text from `regulatory_findings` (e.g., *"Critical vulnerability found in core banking database..."*). It generates 768-dimensional vector embeddings of the text's semantic meaning. We pass these embeddings into a Random Forest classifier that predicts the probability (0% to 100%) that the finding represents a "High Severity" systemic threat. This probability becomes the `high_sev_rate` feature.
     * **`regulatory_findings_pressure`:** We combine the `high_sev_rate` with the *count* of unresolved findings to create a single pressure metric indicating the likelihood of regulatory fines and extended downtime during an incident.
     """)
+    st.markdown('</div>', unsafe_allow_html=True)

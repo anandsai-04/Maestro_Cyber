@@ -10,7 +10,7 @@ To launch them, open your terminal in this repository and run the dynamic links 
 - **[Use Case 1: Frequency-Severity Pricing & EDA](http://localhost:8501)**
   - Run command: `streamlit run app.py`
 - **[Use Case 2: Portfolio BI Explainer & AI Agent](http://localhost:8502)**
-  - Run command: `streamlit run app_3_portfolio.py`
+  - Run command: `streamlit run app_2.py`
 
 *(Note: Click the dynamic links above once you have executed the respective run commands in your terminal.)*
 
@@ -113,7 +113,7 @@ maestro_cyber/
 ├── README.md                           (this file)
 ├── requirements.txt
 ├── app.py                              (Streamlit Dashboard for Use Case 1)
-├── app_3_portfolio.py                  (Streamlit Dashboard for Use Case 2: Portfolio AI Explainer)
+├── app_2.py                            (Streamlit Dashboard for Use Case 2: Portfolio AI Explainer)
 ├── data/                               (Mock datasets and output features)
 ├── code/
 │   ├── 01_use_case_1_eda.py            (End-to-End Pipeline & Modeling)
