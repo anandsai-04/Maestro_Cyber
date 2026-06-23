@@ -291,14 +291,58 @@ with tab_agent:
 # TAB 2: ENGINEERED FEATURES ANALYTICS
 # ------------------------------------------
 with tab_features:
-    st.markdown("### The Power of Merged Engineered Features")
-    st.write("Instead of using raw variables, we mathematically merged highly correlated variables to create robust index scores.")
+    st.markdown("### 🧬 How We Engineered The Features")
+    st.write("To improve the AI's predictive power, we didn't just use raw variables. We mathematically merged correlated metrics into risk indices and used Natural Language Processing (NLP) to extract insights from unstructured text.")
     
+    st.markdown("#### 1. Merged Risk Indices (Feature Engineering)")
+    col_feat1, col_feat2 = st.columns(2)
+    
+    with col_feat1:
+        st.markdown("""
+        **🛡️ Cyber Control Score**
+        - **Why:** Grouping fragmented security controls into one holistic metric prevents the model from overfitting to individual checkboxes.
+        - **How:** We applied a weighted average to core security metrics: 
+          `(0.40 * NIST Maturity) + (0.25 * MFA Coverage) + (0.20 * EDR Flag) + (0.15 * SOC Flag)`
+        
+        **🔗 Vendor Risk Pressure**
+        - **Why:** A high number of vendors is only dangerous if internal controls are weak.
+        - **How:** We created a ratio by dividing the `Total Number of Vendors` by the `NIST Maturity Score`. This captures systemic third-party supply chain risk.
+        """)
+        
+    with col_feat2:
+        st.markdown("""
+        **🚨 Regulatory Findings Pressure**
+        - **Why:** Past audits are strong predictors of future breaches, but not all findings are equal.
+        - **How:** We scaled the total number of findings logarithmically and multiplied it by the ratio of High/Medium severity findings, plus an NLP-derived risk penalty.
+        
+        **⚠️ Control Gap Score**
+        - **Why:** It represents the remaining vulnerability.
+        - **How:** Simply calculated as `1.0 - Cyber Control Score`.
+        """)
+
+    st.markdown("---")
+    st.markdown("#### 2. Natural Language Processing (NLP) Extraction")
+    st.write("A major component of this pricing engine is processing **unstructured regulatory audit text** and **threat intel reports**.")
+    
+    col_nlp1, col_nlp2 = st.columns([1, 2])
+    with col_nlp1:
+        st.image("https://huggingface.co/front/assets/huggingface_logo-noborder.svg", width=100) # Huggingface logo as placeholder
+        st.markdown("**Model Used:**")
+        st.markdown("`DistilBERT` (Transformer Model)")
+    with col_nlp2:
+        st.markdown("""
+        **What features did we extract?**
+        1. **Severity Probability (`nlp_prob`):** We passed raw text strings from auditor notes (e.g., *"The client failed to patch critical VPN vulnerabilities for 6 months"*) through a fine-tuned DistilBERT model.
+        2. **Output:** The NLP model outputs a probability score (e.g., `0.10` or 10%) indicating the likelihood that the text describes a *critical, unmitigated threat*.
+        3. **Integration:** This `nlp_prob` is then dynamically injected into the **Regulatory Findings Pressure** equation, meaning qualitative text directly increases the quantitative premium charged!
+        """)
+
+    st.markdown("---")
+    st.markdown("### Visual Evidence of Feature Engineering")
     f_col1, f_col2 = st.columns(2)
     
     with f_col1:
-        st.subheader("1. Cyber Control Score vs Claim Rate")
-        st.info("**What is this?** We merged `NIST Maturity`, `MFA %`, `EDR flag`, and `SOC flag` into a single 0-to-1 Control Score.")
+        st.subheader("Cyber Control Score vs Claim Rate")
         df["control_bin"] = pd.qcut(df["cyber_control_score"], q=4, labels=["Weak", "Developing", "Strong", "Excellent"])
         fig_c = px.bar(df.groupby("control_bin", observed=False)["had_claim"].mean().reset_index(), 
                        x="control_bin", y="had_claim", color="had_claim", color_continuous_scale="Reds",
@@ -306,8 +350,7 @@ with tab_features:
         st.plotly_chart(fig_c, use_container_width=True)
         
     with f_col2:
-        st.subheader("2. Vendor Control Pressure vs Total Loss")
-        st.info("**What is this?** We divided `Number of Vendors` by the `NIST Maturity` to create a ratio indicating Third-Party Supply Chain Risk.")
+        st.subheader("Vendor Control Pressure vs Total Loss")
         fig_v = px.scatter(df, x="vendor_control_pressure", y="total_loss", color="sub_sector", 
                            log_y=True,
                            labels={"vendor_control_pressure": "Vendor Risk Pressure Score", "total_loss": "Historical Claim Loss ($)"})
