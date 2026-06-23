@@ -12,7 +12,8 @@ try:
     from google import genai
     from google.genai import types
 except ImportError:
-    pass
+    st.error("Please run `pip install google-genai` to use the AI Agent features.")
+    st.stop()
 
 # Setup Paths
 BASE_DIR = Path(__file__).resolve().parent
@@ -160,20 +161,164 @@ glm_auc = roc_auc_score(y_freq, df["glm_prob"])
 # ==========================================
 # TABS
 # ==========================================
-tab_calc, tab_features, tab_models, tab_agent = st.tabs([
-    "🧮 Interactive Pricing Engine", 
-    "🧠 Engineered Features Analytics", 
-    "📊 Model Comparison & Tail Risk",
-    "🤖 AI Actuarial Chatbot"
+tab_agent, tab_features, tab_calc, tab_models = st.tabs([
+    "📊 Portfolio Analytics & AI Explainer", 
+    "🧬 Feature Derivation Explainer", 
+    "🧮 Interactive Pricing Engine",
+    "📈 Model Comparison & Tail Risk"
 ])
+
+# ------------------------------------------
+# TAB 1: PORTFOLIO ANALYTICS & AI EXPLAINER
+# ------------------------------------------
+with tab_agent:
+    st.markdown("### Massive Feature Visualization Dashboard")
+    st.write("This tab visualizes the exact effects of every extracted and merged feature on `bi_loss` and `loss_ratio`.")
+    
+    # 1. Categorical Visualizations
+    st.markdown("#### 1. Categorical Feature Impacts")
+    cat_cols = [c for c in ['primary_regulator', 'sub_sector', 'policy_year', 'cloud_provider_primary', 'core_banking_vendor', 'vendor_pressure_band'] if c in df.columns]
+    
+    for i in range(0, len(cat_cols), 2):
+        c1, c2 = st.columns(2)
+        if i < len(cat_cols):
+            col_name = cat_cols[i]
+            grouped = df.groupby(col_name, observed=False)[['bi_loss', 'loss_ratio']].mean().reset_index()
+            fig = px.bar(grouped, x=col_name, y='bi_loss', color='loss_ratio', title=f"Avg BI Loss by {col_name}", color_continuous_scale="Viridis")
+            c1.plotly_chart(fig, use_container_width=True)
+        if i + 1 < len(cat_cols):
+            col_name = cat_cols[i+1]
+            grouped = df.groupby(col_name, observed=False)[['bi_loss', 'loss_ratio']].mean().reset_index()
+            fig = px.bar(grouped, x=col_name, y='bi_loss', color='loss_ratio', title=f"Avg BI Loss by {col_name}", color_continuous_scale="Viridis")
+            c2.plotly_chart(fig, use_container_width=True)
+
+    # 2. Numeric Visualizations
+    st.markdown("#### 2. Numeric Feature Impacts")
+    num_cols = [c for c in ['cyber_control_score', 'control_gap_score', 'vendor_control_pressure', 'regulatory_findings_pressure', 'high_sev_rate', 'limit_to_revenue', 'prior_incident_score', 'earned_premium'] if c in df.columns]
+    
+    for i in range(0, len(num_cols), 2):
+        c1, c2 = st.columns(2)
+        if i < len(num_cols):
+            col_name = num_cols[i]
+            fig = px.scatter(df, x=col_name, y='bi_loss', color='loss_ratio', title=f"{col_name} vs BI Loss", color_continuous_scale="Inferno")
+            c1.plotly_chart(fig, use_container_width=True)
+        if i + 1 < len(num_cols):
+            col_name = num_cols[i+1]
+            fig = px.scatter(df, x=col_name, y='bi_loss', color='loss_ratio', title=f"{col_name} vs BI Loss", color_continuous_scale="Inferno")
+            c2.plotly_chart(fig, use_container_width=True)
+            
+    st.markdown("---")
+    st.markdown('<div class="glass-card">', unsafe_allow_html=True)
+    st.subheader("🤖 AI Actuarial Report & Chat")
+    st.write("This agent uses Gemini ADK to explicitly explain the visualizations above based on the deterministic patterns.")
+    
+    api_key = st.text_input("Enter Gemini API Key to run Agent:", type="password", key="agent_key_app1")
+    
+    if api_key:
+        client = genai.Client(api_key=api_key)
+        
+        # Load SHAP global feature importances
+        try:
+            shap_df = pd.read_csv("outputs/model_outputs/shap_importances.csv")
+            shap_importances = shap_df.set_index('Feature')['SHAP_Importance'].to_dict()
+        except FileNotFoundError:
+            shap_importances = {"Error": "SHAP importances not generated yet."}
+            
+        stats = {
+            "avg_loss_ratio": df['loss_ratio'].mean() if 'loss_ratio' in df.columns else None,
+            "avg_bi_loss": df['bi_loss'].mean() if 'bi_loss' in df.columns else None,
+            "AI_SHAP_Feature_Importances": shap_importances
+        }
+        
+        if "agent_report_app1" not in st.session_state:
+            with st.spinner("Agent is analyzing deterministic stats and SHAP importances..."):
+                prompt = f"""
+                You are an expert Chief Actuary reviewing a cyber insurance portfolio. 
+                Crucially, I have included the SHAP Feature Importances from the XGBoost pricing engine.
+                
+                Here are the statistical effects and SHAP importances:
+                {stats}
+                
+                Write a concise executive report for the underwriters. 
+                Explicitly study and explain the effect of Vendor Control Pressure, Regulatory Findings, and Cyber Control Score on BI Loss.
+                **CRITICAL:** Explicitly use the AI_SHAP_Feature_Importances to explain *why* the AI Pricing Engine cares about certain features over others, relating directly to the visualizations they see on the screen.
+                """
+                
+                try:
+                    response = client.models.generate_content(
+                        model='gemini-2.5-flash',
+                        contents=prompt
+                    )
+                    st.session_state["agent_report_app1"] = response.text
+                    st.session_state.messages_app1 = [
+                        {"role": "model", "content": "I have completed the portfolio analysis. Ask me follow-up questions about BI loss, specific vendors, or risk drivers below!"}
+                    ]
+                except Exception as e:
+                    st.error(f"GenAI Error: {e}")
+        
+        if "agent_report_app1" in st.session_state:
+            st.markdown(st.session_state["agent_report_app1"])
+        
+        # Chat interface
+        st.markdown("---")
+        st.subheader("💬 Chat with the Agent")
+        
+        if "messages_app1" in st.session_state:
+            for msg in st.session_state.messages_app1:
+                with st.chat_message("assistant" if msg["role"] == "model" else "user"):
+                    st.write(msg["content"])
+                    
+            if prompt_input := st.chat_input("Ask about BI Loss or Vendor Pressure..."):
+                st.session_state.messages_app1.append({"role": "user", "content": prompt_input})
+                with st.chat_message("user"):
+                    st.write(prompt_input)
+                    
+                with st.chat_message("assistant"):
+                    with st.spinner("Thinking..."):
+                        chat = client.chats.create(model="gemini-2.5-flash")
+                        chat.send_message(f"Here is the context: {stats}. Report: {st.session_state['agent_report_app1']}. Answer the user.")
+                        response = chat.send_message(prompt_input)
+                        st.write(response.text)
+                
+                st.session_state.messages_app1.append({"role": "model", "content": response.text})
+    else:
+        st.info("Provide API key to automatically generate the AI report and start chatting.")
+    
+    st.markdown('</div>', unsafe_allow_html=True)
 
 
 # ------------------------------------------
-# TAB 1: INTERACTIVE PRICING ENGINE
+# TAB 2: ENGINEERED FEATURES ANALYTICS
+# ------------------------------------------
+with tab_features:
+    st.markdown("### The Power of Merged Engineered Features")
+    st.write("Instead of using raw variables, we mathematically merged highly correlated variables to create robust index scores.")
+    
+    f_col1, f_col2 = st.columns(2)
+    
+    with f_col1:
+        st.subheader("1. Cyber Control Score vs Claim Rate")
+        st.info("**What is this?** We merged `NIST Maturity`, `MFA %`, `EDR flag`, and `SOC flag` into a single 0-to-1 Control Score.")
+        df["control_bin"] = pd.qcut(df["cyber_control_score"], q=4, labels=["Weak", "Developing", "Strong", "Excellent"])
+        fig_c = px.bar(df.groupby("control_bin", observed=False)["had_claim"].mean().reset_index(), 
+                       x="control_bin", y="had_claim", color="had_claim", color_continuous_scale="Reds",
+                       labels={"control_bin": "Merged Control Score", "had_claim": "Claim Probability"})
+        st.plotly_chart(fig_c, use_container_width=True)
+        
+    with f_col2:
+        st.subheader("2. Vendor Control Pressure vs Total Loss")
+        st.info("**What is this?** We divided `Number of Vendors` by the `NIST Maturity` to create a ratio indicating Third-Party Supply Chain Risk.")
+        fig_v = px.scatter(df, x="vendor_control_pressure", y="total_loss", color="sub_sector", 
+                           log_y=True,
+                           labels={"vendor_control_pressure": "Vendor Risk Pressure Score", "total_loss": "Historical Claim Loss ($)"})
+        st.plotly_chart(fig_v, use_container_width=True)
+
+# ------------------------------------------
+# TAB 3: INTERACTIVE PRICING ENGINE
 # ------------------------------------------
 with tab_calc:
     st.markdown("### Dynamically Price a New Policy Profile")
-    st.write("Adjust the features below. The Random Forest AI will calculate the expected frequency, expected severity, and final technical premium on the fly.")
+    st.write("Adjust the features below. The Random Forest AI will calculate expected frequency, severity, and premium on the fly.")
     
     col_in1, col_in2, col_in3 = st.columns(3)
     
@@ -202,11 +347,11 @@ with tab_calc:
         n_high = st.slider("High Severity Findings", min_value=0, max_value=n_findings, value=0)
         n_med = st.slider("Medium Severity Findings", min_value=0, max_value=n_findings-n_high if n_findings-n_high > 0 else 0, value=0)
         
-        st.info("🤖 **NLP Note:** DistilBERT automatically extracts the severity probability from unstructured text (baseline 10% applied).")
+        st.info("🤖 **NLP Note:** DistilBERT automatically extracts the severity probability from unstructured text.")
         nlp_prob = 0.10
 
     # Transform Raw Inputs to Engineered Features
-    exp_size = np.log1p(revenue) / 15.0 # Rough scaling
+    exp_size = np.log1p(revenue) / 15.0 
     crit_ops = int(has_trading) + int(processes_payments)
     pay_trad = 1 if (has_trading and processes_payments) else 0
     
@@ -225,28 +370,21 @@ with tab_calc:
     reg_pressure = np.log1p(n_findings) * (1.0 + high_sev_rate + nlp_prob) * (1.0 + 0.25 * med_sev_rate)
     
     st.markdown("### 📊 Live Engineered Feature Calculations")
-    st.write("These merged features are mathematically derived from your raw inputs above and fed directly into the Random Forest AI.")
-    
     e_col1, e_col2, e_col3 = st.columns(3)
     
     with e_col1:
-        st.markdown("**Cyber Control Score** (Merged NIST, MFA, EDR, SOC)")
+        st.markdown("**Cyber Control Score**")
         st.progress(cyber_control_score)
-        st.caption(f"Score: {cyber_control_score:.2f} / 1.00")
         
     with e_col2:
-        st.markdown("**Vendor Risk Pressure** (Vendors / NIST)")
-        # Normalize for progress bar display (max expected around 50)
+        st.markdown("**Vendor Risk Pressure**")
         norm_vendor = min(vendor_pressure / 50.0, 1.0)
         st.progress(norm_vendor)
-        st.caption(f"Score: {vendor_pressure:.1f}")
         
     with e_col3:
-        st.markdown("**Regulatory Pressure** (Findings + NLP AI)")
-        # Normalize for progress bar display (max expected around 20)
+        st.markdown("**Regulatory Pressure**")
         norm_reg = min(reg_pressure / 20.0, 1.0)
         st.progress(norm_reg)
-        st.caption(f"Score: {reg_pressure:.2f}")
     
     input_dict = {
         "exposure_size_score": exp_size,
@@ -259,31 +397,21 @@ with tab_calc:
         "hybrid_cloud_flag": hybrid_flag
     }
     
-    # Add categoricals exactly as they appear in dummy columns
     for col in categorical_cols:
         val = sub_sector if col == "sub_sector" else cloud_provider
         dummy_col = f"{col}_{val}"
         if dummy_col in features_list:
             input_dict[dummy_col] = 1
             
-    # Fill remaining dummy columns with 0
-    input_array = []
-    for f in features_list:
-        input_array.append(input_dict.get(f, 0))
-        
+    input_array = [input_dict.get(f, 0) for f in features_list]
     input_df = pd.DataFrame([input_array], columns=features_list)
     
-    # Predict
     pred_freq = rf_freq.predict_proba(input_df)[0][1]
     pred_log_sev = rf_sev.predict(input_df)[0]
     pred_sev = np.expm1(pred_log_sev)
     
     pure_premium = pred_freq * pred_sev
-    
-    # Risk Load (Capital + Expense)
-    expense_ratio = 0.25
-    risk_margin = 0.20 # Base margin, scales with pure premium in this dynamic context
-    tech_premium = pure_premium / (1 - expense_ratio - risk_margin)
+    tech_premium = pure_premium / (1 - 0.25 - 0.20)
     
     st.markdown("---")
     st.markdown("### Pricing Output")
@@ -296,49 +424,17 @@ with tab_calc:
     with o_col3:
         st.markdown(f'<div class="metric-card"><div class="metric-label">Modeled Pure Premium</div><div class="metric-value">${pure_premium:,.0f}</div></div>', unsafe_allow_html=True)
     with o_col4:
-        st.markdown(f'<div class="metric-card"><div class="metric-label">Technical Premium (Charged)</div><div class="metric-value">${tech_premium:,.0f}</div></div>', unsafe_allow_html=True)
-        
+        st.markdown(f'<div class="metric-card"><div class="metric-label">Technical Premium</div><div class="metric-value">${tech_premium:,.0f}</div></div>', unsafe_allow_html=True)
+
 
 # ------------------------------------------
-# TAB 2: ENGINEERED FEATURES ANALYTICS
-# ------------------------------------------
-with tab_features:
-    st.markdown("### The Power of Merged Engineered Features")
-    st.write("""
-    Instead of using raw, unscaled variables, we mathematically merged highly correlated variables to create robust index scores. 
-    Here is how these newly engineered features directly impact historical claims.
-    """)
-    
-    f_col1, f_col2 = st.columns(2)
-    
-    with f_col1:
-        st.subheader("1. Cyber Control Score vs Claim Rate")
-        st.info("**What is this?** We merged `NIST Maturity`, `MFA %`, `EDR flag`, and `SOC flag` into a single 0-to-1 Control Score.")
-        # Bin the score
-        df["control_bin"] = pd.qcut(df["cyber_control_score"], q=4, labels=["Weak", "Developing", "Strong", "Excellent"])
-        fig_c = px.bar(df.groupby("control_bin", observed=False)["had_claim"].mean().reset_index(), 
-                       x="control_bin", y="had_claim", color="had_claim", color_continuous_scale="Reds",
-                       labels={"control_bin": "Merged Control Score", "had_claim": "Claim Probability"})
-        st.plotly_chart(fig_c, use_container_width=True)
-        
-    with f_col2:
-        st.subheader("2. Vendor Control Pressure vs Total Loss")
-        st.info("**What is this?** We divided `Number of Vendors` by the `NIST Maturity` to create a ratio indicating Third-Party Supply Chain Risk.")
-        fig_v = px.scatter(df, x="vendor_control_pressure", y="total_loss", color="sub_sector", 
-                           log_y=True,
-                           labels={"vendor_control_pressure": "Vendor Risk Pressure Score", "total_loss": "Historical Claim Loss ($)"})
-        st.plotly_chart(fig_v, use_container_width=True)
-
-# ------------------------------------------
-# TAB 3: MODEL COMPARISON & TAIL RISK
+# TAB 4: MODEL COMPARISON & TAIL RISK
 # ------------------------------------------
 with tab_models:
     m_col1, m_col2 = st.columns(2)
     
     with m_col1:
         st.subheader("Why Random Forest beats GLM")
-        st.write("Generalized Linear Models (GLMs) struggle with complex, non-linear cyber risks (e.g., when a bank uses a Hybrid Cloud *and* has weak MFA). The Random Forest implicitly captures these interactions.")
-        
         comp_df = pd.DataFrame({
             "Model": ["GLM (Logistic)", "Random Forest (AI)"],
             "AUC-ROC Score": [glm_auc, rf_auc]
@@ -349,8 +445,6 @@ with tab_models:
         
     with m_col2:
         st.subheader("Value at Risk (VaR) & TVaR")
-        st.write("Using the portfolio's total losses, we can identify the Tail Risk for Capital allocation.")
-        
         losses = df[df["total_loss"] > 0]["total_loss"]
         p95 = np.percentile(losses, 95)
         p99 = np.percentile(losses, 99)
@@ -361,91 +455,5 @@ with tab_models:
                                 color_discrete_sequence=['#FF4B4B'])
         fig_tail.add_vline(x=p95, line_dash="dash", line_color="orange", annotation_text="VaR 95%")
         fig_tail.add_vline(x=p99, line_dash="dash", line_color="red", annotation_text="VaR 99%")
-        
         st.plotly_chart(fig_tail, use_container_width=True)
-        st.markdown(f"**99% Tail Value at Risk (TVaR):** The average loss of the worst 1% of claims is **${tvar:,.0f}**. This is the capital required to survive systemic events like widespread vendor ransomware.")
-
-
-# ------------------------------------------
-# TAB 4: AI ACTUARIAL CHATBOT
-# ------------------------------------------
-with tab_agent:
-    st.markdown('<div class="glass-card">', unsafe_allow_html=True)
-    st.subheader("🤖 AI Actuarial Report & Chat")
-    st.write("This agent uses Gemini ADK to explain the portfolio's BI loss, Vendor Control Pressure, and Regulatory Pressure.")
-    
-    api_key = st.text_input("Enter Gemini API Key to run Agent:", type="password", key="agent_key_app1")
-    
-    if api_key:
-        client = genai.Client(api_key=api_key)
-        
-        # Load SHAP global feature importances
-        try:
-            shap_df = pd.read_csv("outputs/model_outputs/shap_importances.csv")
-            shap_importances = shap_df.set_index('Feature')['SHAP_Importance'].to_dict()
-        except FileNotFoundError:
-            shap_importances = {"Error": "SHAP importances not generated yet."}
-            
-        stats = {
-            "avg_loss_ratio": df['loss_ratio'].mean(),
-            "avg_bi_loss": df['bi_loss'].mean(),
-            "AI_SHAP_Feature_Importances": shap_importances
-        }
-        
-        # Auto-generate report if not in session state
-        if "agent_report_app1" not in st.session_state:
-            with st.spinner("Agent is analyzing deterministic stats and SHAP importances..."):
-                prompt = f"""
-                You are an expert Chief Actuary reviewing a cyber insurance portfolio. 
-                I have already run the heavy deterministic calculations to save your tokens. 
-                Crucially, I have also included the SHAP Feature Importances from the XGBoost pricing engine.
-                
-                Here are the statistical effects and SHAP importances:
-                {stats}
-                
-                Write a concise executive report for the underwriters. 
-                Explicitly study and explain the effect of Vendor Control Pressure, Regulatory Findings, and Cyber Control Score on BI Loss.
-                **CRITICAL:** Explicitly use the AI_SHAP_Feature_Importances to explain *why* the AI Pricing Engine cares about certain features over others.
-                """
-                
-                response = client.models.generate_content(
-                    model='gemini-2.5-flash',
-                    contents=prompt
-                )
-                st.session_state["agent_report_app1"] = response.text
-                
-                # Initialize chat history
-                st.session_state.messages_app1 = [
-                    {"role": "model", "content": "I have completed the portfolio analysis. Ask me follow-up questions about BI loss, specific vendors, or risk drivers below!"}
-                ]
-        
-        st.markdown(st.session_state["agent_report_app1"])
-        
-        # Chat interface
-        st.markdown("---")
-        st.subheader("💬 Chat with the Agent")
-        
-        if "messages_app1" in st.session_state:
-            # Display chat messages
-            for msg in st.session_state.messages_app1:
-                with st.chat_message("assistant" if msg["role"] == "model" else "user"):
-                    st.write(msg["content"])
-                    
-            # Chat input
-            if prompt_input := st.chat_input("Ask about BI Loss or Vendor Pressure..."):
-                st.session_state.messages_app1.append({"role": "user", "content": prompt_input})
-                with st.chat_message("user"):
-                    st.write(prompt_input)
-                    
-                with st.chat_message("assistant"):
-                    with st.spinner("Thinking..."):
-                        chat = client.chats.create(model="gemini-2.5-flash")
-                        chat.send_message(f"Here is the context: {stats}. Report: {st.session_state['agent_report_app1']}. Answer the user.")
-                        response = chat.send_message(prompt_input)
-                        st.write(response.text)
-                
-                st.session_state.messages_app1.append({"role": "model", "content": response.text})
-    else:
-        st.info("Provide API key to automatically generate the AI report and start chatting.")
-    
-    st.markdown('</div>', unsafe_allow_html=True)
+        st.markdown(f"**99% Tail Value at Risk (TVaR):** **${tvar:,.0f}**.")
