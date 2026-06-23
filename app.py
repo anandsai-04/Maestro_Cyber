@@ -219,6 +219,7 @@ with tab_agent:
     st.markdown('<div class="glass-card">', unsafe_allow_html=True)
     st.subheader("🤖 AI Actuarial Report & Chat")
     st.write("This agent uses Gemini ADK to explicitly explain the visualizations above based on the deterministic patterns.")
+    st.warning("⚠️ **Recommendation:** It is highly recommended to use a **Gemini Pro Account** or higher API tier. Because the Agent processes large amounts of data and generates detailed reports, the free-tier API has a high risk of quickly exhausting tokens or hitting rate limits.")
     
     api_key = st.text_input("Enter Gemini API Key to run Agent:", type="password", key="agent_key_app1")
     
