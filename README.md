@@ -7,10 +7,12 @@ By combining traditional Actuarial Science with modern Machine Learning (XGBoost
 ## 🚀 Live Streamlit Dashboard
 You can interact with the outputs, visualize risk patterns, dynamically alter security controls, and chat with the AI Agent using the Streamlit application. 
 
-To launch the dashboard, open your terminal in this repository and run:
-```bash
-streamlit run app.py
-```
+To launch the dashboard, open your terminal in this repository and run the command below, then click the dynamic link:
+
+- **[Advanced Cyber Pricing Dashboard](http://localhost:8501)**
+  - Run command: `streamlit run app.py`
+
+*(Note: Click the dynamic link above once you have executed the run command in your terminal.)*
 
 ---
 
