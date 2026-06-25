@@ -585,8 +585,12 @@ with tab_hawkes:
             **The Core Intuition (The Risk Curve):**
             Imagine a line graph tracking your daily cyber risk. Under a standard model, that line is perfectly flat. Under a Hawkes model, every time an attack happens, the line shoots straight up vertically (Excitation). Then, over the next few days, the line slowly slopes back down (Decay) in an exponential curve until it hits the flat baseline again. This perfectly mimics how a zero-day exploit drops, causes panic, and then fades as IT teams patch the vulnerability!
             
-            **How did we find these numbers?**
-            We didn't guess. We pulled the exact timestamps (`loss_date`) of every claim from the historical database, calculating the precise number of days between each attack. We then ran a **Maximum Likelihood Estimation (MLE)** algorithm in Python. The algorithm tested thousands of parameter combinations until it found the exact trio that maximized the probability of observing our specific, chronological sequence of claims.
+            **How did we mathematically find these numbers?**
+            We didn't guess or arbitrarily assign them. We proved them using the dataset:
+            1.  **Extracting Timestamps:** We pulled the exact `loss_date` of every historical claim from the Maestro database, sorted them chronologically, and calculated the precise number of days between each attack.
+            2.  **The Negative Log-Likelihood Function:** We programmed the complex Hawkes likelihood equation, which calculates the exact mathematical probability of our specific sequence of attacks happening, given any random set of parameters.
+            3.  **L-BFGS-B Optimization:** We fed the timeline into an advanced Python optimization algorithm (`scipy.optimize`). The algorithm rapidly tested thousands of different combinations of $\mu, \alpha,$ and $\beta$, calculating the "likelihood score" for each. 
+            4.  **The Result:** The algorithm converged on the exact trio of parameters below that *maximized* the probability of our dataset existing in the real world. This is called **Maximum Likelihood Estimation (MLE)**.
             """)
             st.metric(label="1. Baseline (μ)", value=f"{h_data['mu']:.4f}", delta="Random daily attacks")
             st.metric(label="2. Excitation (α)", value=f"{h_data['alpha']:.4f}", delta="Risk spike after a breach!", delta_color="inverse")
