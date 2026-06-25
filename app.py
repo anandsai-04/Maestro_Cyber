@@ -292,10 +292,15 @@ with tab_agent:
         except FileNotFoundError:
             glm_coefficients = {"Error": "GLM coefficients not generated yet."}
             
+        # Calculate Correlations for Agent to understand the visual scatterplots
+        corr_features = ['cyber_control_score', 'control_gap_score', 'vendor_control_pressure', 'regulatory_findings_pressure', 'bi_loss', 'loss_ratio']
+        corr_dict = df[corr_features].corr()[['bi_loss', 'loss_ratio']].to_dict() if all(f in df.columns for f in corr_features) else {}
+        
         stats = {
             "avg_loss_ratio": df['loss_ratio'].mean() if 'loss_ratio' in df.columns else None,
             "avg_bi_loss": df['bi_loss'].mean() if 'bi_loss' in df.columns else None,
-            "GLM_Coefficients": glm_coefficients
+            "GLM_Coefficients": glm_coefficients,
+            "Feature_Correlations": corr_dict
         }
         
         if "agent_report_app1" not in st.session_state:
