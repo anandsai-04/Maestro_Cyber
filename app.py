@@ -527,7 +527,12 @@ with tab_calc:
     st.info(f"""
     **Pricing Formula:** `Final Premium = (Pure Premium + Risk Load) / (1 - Expense Ratio)`
     *   **Expense Ratio:** 25% (Standard operating costs)
-    *   **Pure Premium:** ${pure_premium:,.0f} (Expected losses derived from the GLMs)
+    
+    **How the Pure Premium is Found:**
+    `Pure Premium = Expected Frequency × Expected Severity`
+    *   **Frequency:** {pred_freq:.2%} (Calculated using the **Poisson GLM**. *Note: Poisson mathematically outperformed Negative Binomial on this dataset.*)
+    *   **Severity:** ${pred_sev:,.0f} (Calculated using the **Gamma GLM**. *Note: Kept for regulatory baseline, though Lognormal handles cyber fat-tails better.*)
+    *   **Calculation:** {pred_freq:.4f} × ${pred_sev:,.0f} = **${pure_premium:,.0f}**
     
     **How the Risk Load is Found:**
     To find the Risk Load for this specific policy, we allocate a portion of the massive Portfolio Catastrophe Risk (TVaR) to this single policy, applying a 10% Cost of Capital.
