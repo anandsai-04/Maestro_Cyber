@@ -555,36 +555,7 @@ with tab_models:
     m_col1, m_col2 = st.columns(2)
     
     with m_col1:
-        st.subheader("Model Comparison: GLM vs XGBoost")
-        st.write("We train a tuned **XGBoost** model alongside the **Actuarial GLM**. While XGBoost captures non-linear interactions better (higher AUC), we explicitly use the GLM for the final Technical Premium pricing to maintain regulatory transparency.")
-        
-        # Display AUC Comparison
-        auc_df = pd.DataFrame({
-            "Model": ["Actuarial GLM (Poisson)", "XGBoost (HistGradientBoosting)"],
-            "AUC-ROC Score": [glm_auc, xgb_auc]
-        })
-        fig_auc = px.bar(auc_df, x="Model", y="AUC-ROC Score", color="Model", title="Frequency Model Predictive Power", text_auto=".3f")
-        fig_auc.update_layout(yaxis_range=[0.5, 1.0])
-        st.plotly_chart(fig_auc, use_container_width=True)
 
-        st.subheader("GLM Mathematical Coefficients")
-        st.write("This shows the exact mathematical weights (coefficients) assigned to each feature by the Poisson and Gamma GLMs.")
-        try:
-            c_df = pd.read_csv("outputs/model_outputs/glm_coefficients.csv")
-            # Create a combined visualization of Frequency vs Severity coefficients
-            # We sort by Frequency Coef absolute magnitude for readability
-            c_df['Abs_Freq'] = c_df['Frequency_Coef'].abs()
-            c_df = c_df.sort_values(by='Abs_Freq', ascending=False).head(10)
-            
-            fig_coef = go.Figure(data=[
-                go.Bar(name='Freq (Poisson)', x=c_df['Feature'], y=c_df['Frequency_Coef']),
-                go.Bar(name='Sev (Gamma)', x=c_df['Feature'], y=c_df['Severity_Coef'])
-            ])
-            fig_coef.update_layout(barmode='group', title="Top 10 GLM Weights")
-            st.plotly_chart(fig_coef, use_container_width=True)
-        except Exception as e:
-            st.warning("GLM Coefficients not available yet. Please interact with the Pricing Engine first.")
-            
         with st.expander("📝 Note: Why Poisson/Gamma over Advanced Distributions & XGBoost?"):
             st.markdown("""
             **XGBoost & SHAP Values:**
