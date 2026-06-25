@@ -540,7 +540,23 @@ with tab_models:
         fig_tail.add_vline(x=p95, line_dash="dash", line_color="orange", annotation_text="VaR 95%")
         fig_tail.add_vline(x=p99, line_dash="dash", line_color="red", annotation_text="VaR 99%")
         st.plotly_chart(fig_tail, use_container_width=True)
-        st.markdown(f"**99% Tail Value at Risk (TVaR):** **${tvar:,.0f}**.")
+        # Attempt to load Hawkes results for comparison
+        try:
+            import json
+            with open('outputs/model_outputs/hawkes_results.json', 'r') as f:
+                h_data = json.load(f)
+            
+            st.markdown("### 99% Tail Value at Risk (TVaR) Comparison")
+            col_tvar1, col_tvar2 = st.columns(2)
+            col_tvar1.metric(label="Independent TVaR (Poisson)", value=f"${h_data['tvar_poisson']:,.0f}")
+            col_tvar2.metric(label="Contagious TVaR (Hawkes)", value=f"${h_data['tvar_hawkes']:,.0f}", delta=f"{h_data['contagion_premium']:,.0f} (Contagion Effect)", delta_color="inverse")
+            
+            st.info("""
+            **Which simulation is better?** 
+            The **Hawkes TVaR is mathematically superior** for cyber insurance. The Poisson TVaR (left) naively assumes every cyber attack is independent. The Hawkes TVaR (right) successfully simulates the "domino effect" of real-world ransomware clusters and supply-chain contagion. By capturing this compounding variance, the Hawkes simulation gives underwriters a much more accurate Risk Margin requirement.
+            """)
+        except:
+            st.markdown(f"**99% Tail Value at Risk (TVaR) [Poisson Only]:** **${tvar:,.0f}**.")
         
         with st.expander("📝 Note: Simulating Tail Risk & Imbalanced Data Adjustments"):
             st.markdown("""
