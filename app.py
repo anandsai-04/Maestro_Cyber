@@ -169,11 +169,12 @@ coef_df.to_csv("outputs/model_outputs/glm_coefficients.csv", index=False)
 # ==========================================
 # TABS
 # ==========================================
-tab_agent, tab_features, tab_calc, tab_models = st.tabs([
+tab_agent, tab_features, tab_calc, tab_models, tab_hawkes = st.tabs([
     "📊 Portfolio Analytics & AI Explainer", 
     "🧬 Feature Derivation Explainer", 
     "🧮 Interactive Pricing Engine",
-    "📈 Model Comparison & Tail Risk"
+    "📈 Model Comparison & Tail Risk",
+    "🦠 Advanced Contagion (Hawkes)"
 ])
 
 # ------------------------------------------
@@ -555,3 +556,41 @@ with tab_models:
             3. If a claim occurred, we drew a random financial loss amount from our **Gamma Severity distribution**.
             4. We sorted all 50,000 years from best to worst. The average of the absolute worst 1% (the top 500 disaster years) becomes our TVaR—dictating exactly how much capital we must hold in reserve.
             """)
+
+# ------------------------------------------
+# TAB 5: ADVANCED CONTAGION (HAWKES PROCESS)
+# ------------------------------------------
+with tab_hawkes:
+    st.header("🦠 Advanced Cyber Contagion Modeling")
+    st.markdown("""
+    While the **Poisson GLM** assumes every cyber attack is an independent, random event, we know that in the real world, cyber risk is highly **contagious**. When a major vulnerability (like Log4j) is discovered, we see massive, correlated "clusters" of attacks.
+    
+    To mathematically model this domino effect, we upgraded the simulation engine using a **Hawkes Process**. This is a stochastic "self-exciting" model—the exact same math used to predict **earthquakes and aftershocks**!
+    """)
+    
+    try:
+        import json
+        with open('outputs/model_outputs/hawkes_results.json', 'r') as f:
+            h_data = json.load(f)
+            
+        h_col1, h_col2 = st.columns(2)
+        with h_col1:
+            st.subheader("The Hawkes Contagion Math")
+            st.markdown("We used Maximum Likelihood Estimation (MLE) on the exact timestamps of our historical claims to find these three parameters:")
+            st.metric(label="1. Baseline (μ)", value=f"{h_data['mu']:.4f}", delta="Random daily attacks")
+            st.metric(label="2. Excitation (α)", value=f"{h_data['alpha']:.4f}", delta="Risk spike after a breach!", delta_color="inverse")
+            st.metric(label="3. Decay (β)", value=f"{h_data['beta']:.4f}", delta="How fast the danger fades")
+            
+            st.info(f"**Insight:** Because the Excitation ($\alpha$) is greater than 0, we have mathematically proven that cyber attacks in this dataset are contagious! Every attack triggers a cluster of roughly `{h_data['branching_ratio']:.2f}` follow-up attacks.")
+            
+        with h_col2:
+            st.subheader("The Financial Impact (Tail Risk)")
+            st.markdown("We threw out the static Poisson dice and ran a new 50,000-year Monte Carlo simulation using the 'self-exciting' Hawkes formula to see the true Catastrophe Risk.")
+            
+            st.metric(label="Old Independent TVaR (Poisson)", value=f"${h_data['tvar_poisson']:,.0f}")
+            st.metric(label="New Contagious TVaR (Hawkes)", value=f"${h_data['tvar_hawkes']:,.0f}", delta=f"{h_data['contagion_premium']:,.0f} (Contagion Risk Premium)", delta_color="inverse")
+            
+            st.warning("By ignoring the 'contagion' effect of cyber risk, standard models can completely underestimate the capital required to survive a systemic ransomware wave!")
+            
+    except Exception as e:
+        st.warning("Hawkes Process data not found. Please run the `05_hawkes_process_simulation.py` script first.")
