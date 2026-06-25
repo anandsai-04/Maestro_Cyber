@@ -219,7 +219,7 @@ with tab_agent:
     st.markdown("---")
     st.markdown('<div class="glass-card">', unsafe_allow_html=True)
     st.subheader("🤖 AI Actuarial Report & Chat")
-    st.write("This agent uses Gemini ADK to explicitly explain the visualizations above based on the deterministic patterns.")
+    st.write("This agent uses Gemini ADK and **Retrieval-Augmented Generation (RAG)** to explicitly explain the visualizations and answer deep technical questions about the advanced Hawkes Process Contagion Model.")
     st.warning("⚠️ **Recommendation:** It is highly recommended to use a **Gemini Pro Account** or higher API tier. Because the Agent processes large amounts of data and generates detailed reports, the free-tier API has a high risk of quickly exhausting tokens or hitting rate limits.")
     
     api_key = st.text_input("Enter Gemini API Key to run Agent:", type="password", key="agent_key_app1")
@@ -261,7 +261,7 @@ with tab_agent:
                     )
                     st.session_state["agent_report_app1"] = response.text
                     st.session_state.messages_app1 = [
-                        {"role": "model", "content": "I have completed the portfolio analysis. Ask me follow-up questions about BI loss, specific vendors, or risk drivers below!"}
+                        {"role": "model", "content": "I have completed the portfolio analysis. Ask me follow-up questions about BI loss, specific vendors, or the Advanced Hawkes Contagion Model below!"}
                     ]
                 except Exception as e:
                     st.error(f"GenAI Error: {e}")
@@ -278,15 +278,40 @@ with tab_agent:
                 with st.chat_message("assistant" if msg["role"] == "model" else "user"):
                     st.write(msg["content"])
                     
-            if prompt_input := st.chat_input("Ask about BI Loss or Vendor Pressure..."):
+            if prompt_input := st.chat_input("Ask about BI Loss, specific vendors, or the Hawkes Contagion Model..."):
                 st.session_state.messages_app1.append({"role": "user", "content": prompt_input})
                 with st.chat_message("user"):
                     st.write(prompt_input)
                     
                 with st.chat_message("assistant"):
-                    with st.spinner("Thinking..."):
+                    with st.spinner("Searching Knowledge Base (RAG) & Thinking..."):
+                        # 1. Define RAG Documents
+                        rag_docs = [
+                            "HAWKES MATH: Unlike Poisson which is independent, Hawkes process is contagious. It has 3 parameters found via Maximum Likelihood Estimation on claim timestamps. Baseline (mu) is random background attacks. Excitation (alpha) is the sudden risk spike after a breach. Decay (beta) is how fast the danger fades.",
+                            "HAWKES SIMULATION: We simulate Hawkes using the Branching Approximation. Immigrants (Parents) are generated using Baseline. Offspring (Children) clusters are generated using a Negative Binomial distribution based on the branching ratio (alpha/beta). Total attacks = Parents + Children.",
+                            "TVaR COMPARISON: Poisson TVaR ignores systemic risk. Hawkes TVaR is mathematically superior because it creates massive right-tail variance via clustering. The difference between them is the Contagion Risk Premium.",
+                            "DISTRIBUTIONS: For frequency, Poisson beat Negative Binomial because the data lacked massive overdispersion. For severity, Lognormal beat Gamma because cyber claims have massive fat tails, but we kept Gamma as the standard regulatory baseline."
+                        ]
+                        
+                        # 2. Vector Search using Gemini Embeddings
+                        retrieved_doc = "No specific RAG context retrieved."
+                        try:
+                            import numpy as np
+                            q_emb = client.models.embed_content(model='text-embedding-004', contents=prompt_input).embeddings[0].values
+                            doc_embs = [client.models.embed_content(model='text-embedding-004', contents=d).embeddings[0].values for d in rag_docs]
+                            similarities = [np.dot(q_emb, d_emb) / (np.linalg.norm(q_emb) * np.linalg.norm(d_emb)) for d_emb in doc_embs]
+                            
+                            best_match_idx = np.argmax(similarities)
+                            if similarities[best_match_idx] > 0.4: # Threshold
+                                retrieved_doc = rag_docs[best_match_idx]
+                        except Exception as e:
+                            pass # Fallback to standard chat if embedding fails
+                            
+                        # 3. Augmented Generation
+                        chat_context = f"You are a Chief Actuary. Previous report: {st.session_state.get('agent_report_app1', '')}. Retrieved Mathematical Knowledge Base (RAG): {retrieved_doc}. Answer the user accurately based on this."
+                        
                         chat = client.chats.create(model="gemini-2.5-flash")
-                        chat.send_message(f"Here is the context: {stats}. Report: {st.session_state['agent_report_app1']}. Answer the user.")
+                        chat.send_message(chat_context)
                         response = chat.send_message(prompt_input)
                         st.write(response.text)
                 
