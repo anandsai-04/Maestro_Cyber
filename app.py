@@ -582,6 +582,9 @@ with tab_hawkes:
             *   **2. Excitation ($\alpha$):** The sudden jump in probability the exact moment a successful breach occurs in the portfolio.
             *   **3. Decay ($\beta$):** How fast that heightened danger fades back to normal as companies patch their systems.
             
+            **The Core Intuition (The Risk Curve):**
+            Imagine a line graph tracking your daily cyber risk. Under a standard model, that line is perfectly flat. Under a Hawkes model, every time an attack happens, the line shoots straight up vertically (Excitation). Then, over the next few days, the line slowly slopes back down (Decay) in an exponential curve until it hits the flat baseline again. This perfectly mimics how a zero-day exploit drops, causes panic, and then fades as IT teams patch the vulnerability!
+            
             **How did we find these numbers?**
             We didn't guess. We pulled the exact timestamps (`loss_date`) of every claim from the historical database, calculating the precise number of days between each attack. We then ran a **Maximum Likelihood Estimation (MLE)** algorithm in Python. The algorithm tested thousands of parameter combinations until it found the exact trio that maximized the probability of observing our specific, chronological sequence of claims.
             """)
