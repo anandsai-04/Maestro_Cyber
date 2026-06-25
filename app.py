@@ -576,16 +576,33 @@ with tab_hawkes:
         h_col1, h_col2 = st.columns(2)
         with h_col1:
             st.subheader("The Hawkes Contagion Math")
-            st.markdown("We used Maximum Likelihood Estimation (MLE) on the exact timestamps of our historical claims to find these three parameters:")
+            st.markdown("""
+            Unlike a Poisson model that assumes a flat probability, the Hawkes Process mathematically recalculates risk every single day using three specific parameters:
+            *   **1. Baseline ($\mu$):** The background rate of unprovoked, random cyber attacks.
+            *   **2. Excitation ($\alpha$):** The sudden jump in probability the exact moment a successful breach occurs in the portfolio.
+            *   **3. Decay ($\beta$):** How fast that heightened danger fades back to normal as companies patch their systems.
+            
+            **How did we find these numbers?**
+            We didn't guess. We pulled the exact timestamps (`loss_date`) of every claim from the historical database, calculating the precise number of days between each attack. We then ran a **Maximum Likelihood Estimation (MLE)** algorithm in Python. The algorithm tested thousands of parameter combinations until it found the exact trio that maximized the probability of observing our specific, chronological sequence of claims.
+            """)
             st.metric(label="1. Baseline (μ)", value=f"{h_data['mu']:.4f}", delta="Random daily attacks")
             st.metric(label="2. Excitation (α)", value=f"{h_data['alpha']:.4f}", delta="Risk spike after a breach!", delta_color="inverse")
             st.metric(label="3. Decay (β)", value=f"{h_data['beta']:.4f}", delta="How fast the danger fades")
             
-            st.info(f"**Insight:** Because the Excitation ($\alpha$) is greater than 0, we have mathematically proven that cyber attacks in this dataset are contagious! Every attack triggers a cluster of roughly `{h_data['branching_ratio']:.2f}` follow-up attacks.")
+            st.info(f"**Insight:** Because the Excitation ($\\alpha$) is greater than 0, we have mathematically proven that cyber attacks in this dataset are contagious! Every attack triggers a cluster of roughly `{h_data['branching_ratio']:.2f}` follow-up attacks.")
             
         with h_col2:
-            st.subheader("The Financial Impact (Tail Risk)")
-            st.markdown("We threw out the static Poisson dice and ran a new 50,000-year Monte Carlo simulation using the 'self-exciting' Hawkes formula to see the true Catastrophe Risk.")
+            st.subheader("The Simulation (Branching Approximation)")
+            st.markdown("""
+            **How did we simulate 50,000 years with this new math?**
+            Simulating a time-dependent contagion process is computationally massive. To execute it efficiently, we used an advanced actuarial technique called the **Branching Representation**:
+            1.  **Immigrants (Parents):** First, we generated the random baseline attacks using just the Baseline ($\mu$) parameter.
+            2.  **Offspring (Children):** For *every single* parent attack generated, the algorithm triggered a sub-simulation. It used a Negative Binomial distribution based on the branching ratio ($\alpha / \beta$) to determine how many 'child' attacks that parent infected.
+            3.  **The Result:** `Total Attacks = Parents + Children`. The simulation draws financial severity for the total cluster.
+            
+            **The Financial Impact:**
+            Because the Hawkes process creates these explosive, compounding clusters of "offspring" attacks, the tail end of the simulation looks much more terrifying than the independent Poisson model.
+            """)
             
             st.metric(label="Old Independent TVaR (Poisson)", value=f"${h_data['tvar_poisson']:,.0f}")
             st.metric(label="New Contagious TVaR (Hawkes)", value=f"${h_data['tvar_hawkes']:,.0f}", delta=f"{h_data['contagion_premium']:,.0f} (Contagion Risk Premium)", delta_color="inverse")
