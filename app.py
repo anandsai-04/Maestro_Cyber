@@ -219,7 +219,7 @@ with tab_agent:
     st.markdown("---")
     st.markdown('<div class="glass-card">', unsafe_allow_html=True)
     st.subheader("🤖 AI Actuarial Report & Chat")
-    st.write("This agent uses Gemini ADK and **Retrieval-Augmented Generation (RAG)** to explicitly explain the visualizations and answer deep technical questions about the advanced Hawkes Process Contagion Model.")
+    st.write("This agent uses Gemini ADK, **Retrieval-Augmented Generation (RAG)**, and **Function Calling (Tools)** to dynamically answer questions, explain math, and execute live pricing calculations on the fly.")
     st.warning("⚠️ **Recommendation:** It is highly recommended to use a **Gemini Pro Account** or higher API tier. Because the Agent processes large amounts of data and generates detailed reports, the free-tier API has a high risk of quickly exhausting tokens or hitting rate limits.")
     
     api_key = st.text_input("Enter Gemini API Key to run Agent:", type="password", key="agent_key_app1")
@@ -227,6 +227,64 @@ with tab_agent:
     if api_key:
         client = genai.Client(api_key=api_key)
         
+        # Define the Tool for the AI Agent
+        def dynamic_pricing_calculator(revenue: float, nist_score: float, mfa_coverage: float, n_vendors: int) -> dict:
+            """Calculates the Poisson and Hawkes technical premiums for a given cyber insurance policy profile on the fly.
+            
+            Args:
+                revenue: The company's annual revenue in millions of dollars (e.g., 500 for $500M).
+                nist_score: The company's NIST Cybersecurity Framework maturity score (1.0 to 5.0).
+                mfa_coverage: The percentage of the company's systems covered by Multi-Factor Authentication (0 to 100).
+                n_vendors: The number of third-party vendors the company uses (e.g., 30).
+            """
+            import numpy as np
+            import pandas as pd
+            import json
+            
+            exp_size = np.log1p(revenue) / 15.0
+            nist_normalized = nist_score / 5.0
+            mfa_normalized = mfa_coverage / 100.0
+            
+            cyber_control_score = (0.40 * nist_normalized) + (0.25 * mfa_normalized) + (0.20 * 1) + (0.15 * 0)
+            control_gap = 1.0 - cyber_control_score
+            vendor_pressure = n_vendors / (nist_score + 0.1)
+            
+            input_dict = {
+                "exposure_size_score": exp_size,
+                "cyber_control_score": cyber_control_score,
+                "control_gap_score": control_gap,
+                "vendor_control_pressure": vendor_pressure,
+                "regulatory_findings_pressure": 0.5,
+                "critical_operations_score": 1,
+                "payment_trading_flag": 0,
+                "hybrid_cloud_flag": 0
+            }
+            
+            input_array = [input_dict.get(f, 0) for f in features_list]
+            input_df = pd.DataFrame([input_array], columns=features_list)
+            
+            pred_freq = glm_freq.predict(input_df)[0]
+            pred_sev = glm_sev.predict(input_df)[0]
+            pure_premium = pred_freq * pred_sev
+            
+            try:
+                with open('outputs/model_outputs/hawkes_results.json', 'r') as f:
+                    h_data = json.load(f)
+                poisson_risk_load = (h_data['tvar_poisson'] / 5000) * 0.10
+                hawkes_risk_load = (h_data['tvar_hawkes'] / 5000) * 0.10
+            except:
+                poisson_risk_load = pure_premium * 0.20
+                hawkes_risk_load = pure_premium * 0.25
+                
+            final_poisson = (pure_premium + poisson_risk_load) / (1 - 0.25)
+            final_hawkes = (pure_premium + hawkes_risk_load) / (1 - 0.25)
+            
+            return {
+                "poisson_technical_premium": round(final_poisson, 2),
+                "hawkes_technical_premium": round(final_hawkes, 2),
+                "insight": "The Hawkes premium explicitly factors in the contagion risk of third-party vendors and poor controls."
+            }
+            
         # Load GLM Coefficients instead of SHAP
         try:
             coef_df = pd.read_csv("outputs/model_outputs/glm_coefficients.csv")
@@ -308,9 +366,13 @@ with tab_agent:
                             pass # Fallback to standard chat if embedding fails
                             
                         # 3. Augmented Generation
-                        chat_context = f"You are a Chief Actuary. Previous report: {st.session_state.get('agent_report_app1', '')}. Retrieved Mathematical Knowledge Base (RAG): {retrieved_doc}. Answer the user accurately based on this."
+                        chat_context = f"You are a Chief Actuary equipped with a Pricing Calculator Tool. Previous report: {st.session_state.get('agent_report_app1', '')}. Retrieved Mathematical Knowledge Base (RAG): {retrieved_doc}. Answer the user accurately based on this or calculate premium using the tool if asked."
                         
-                        chat = client.chats.create(model="gemini-2.5-flash")
+                        from google.genai import types
+                        chat = client.chats.create(
+                            model="gemini-2.5-flash",
+                            config=types.GenerateContentConfig(tools=[dynamic_pricing_calculator])
+                        )
                         chat.send_message(chat_context)
                         response = chat.send_message(prompt_input)
                         st.write(response.text)
@@ -536,6 +598,7 @@ with tab_calc:
     
     **How the Risk Load is Found:**
     To find the Risk Load for this specific policy, we allocate a portion of the massive Portfolio Catastrophe Risk (TVaR) to this single policy, applying a 10% Cost of Capital.
+    *(Total Portfolio TVaR 99% [Poisson]: **${tvar_poisson:,.0f}** | Total Portfolio TVaR 99% [Hawkes]: **${tvar_hawkes:,.0f}**)*
     
     *   **Method 1: Poisson (Independent Risk)**
         *   Poisson TVaR allocated to this policy = Risk Load of **${poisson_risk_load:,.0f}**
