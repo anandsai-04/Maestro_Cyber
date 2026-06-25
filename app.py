@@ -519,13 +519,13 @@ with tab_calc:
     with o_col1:
         st.markdown(f'<div class="metric-card"><div class="metric-label">Modeled Pure Premium</div><div class="metric-value">${pure_premium:,.0f}</div></div>', unsafe_allow_html=True)
     with o_col2:
-        st.markdown(f'<div class="metric-card"><div class="metric-label">Final Premium (Poisson)</div><div class="metric-value">${final_premium_poisson:,.0f}</div></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="metric-card"><div class="metric-label">Technical Premium (Poisson)</div><div class="metric-value">${final_premium_poisson:,.0f}</div></div>', unsafe_allow_html=True)
     with o_col3:
-        st.markdown(f'<div class="metric-card"><div class="metric-label">Final Premium (Hawkes)</div><div class="metric-value">${final_premium_hawkes:,.0f}</div></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="metric-card"><div class="metric-label">Technical Premium (Hawkes)</div><div class="metric-value">${final_premium_hawkes:,.0f}</div></div>', unsafe_allow_html=True)
 
     st.markdown("#### Actuarial Pricing Report")
     st.info(f"""
-    **Pricing Formula:** `Final Premium = (Pure Premium + Risk Load) / (1 - Expense Ratio)`
+    **Pricing Formula:** `Technical Premium = (Pure Premium + Risk Load) / (1 - Expense Ratio)`
     *   **Expense Ratio:** 25% (Standard operating costs)
     
     **How the Pure Premium is Found:**
@@ -539,12 +539,12 @@ with tab_calc:
     
     *   **Method 1: Poisson (Independent Risk)**
         *   Poisson TVaR allocated to this policy = Risk Load of **${poisson_risk_load:,.0f}**
-        *   Calculation: `(${pure_premium:,.0f} + ${poisson_risk_load:,.0f}) / (1 - 0.25)` = **${final_premium_poisson:,.0f}**
+        *   Calculation: `(${pure_premium:,.0f} + ${poisson_risk_load:,.0f}) / (1 - 0.25)` = **${final_premium_poisson:,.0f}** (Poisson Technical Premium)
     *   **Method 2: Hawkes (Contagion Risk)**
         *   Hawkes TVaR allocated to this policy = Risk Load of **${hawkes_risk_load:,.0f}**
-        *   Calculation: `(${pure_premium:,.0f} + ${hawkes_risk_load:,.0f}) / (1 - 0.25)` = **${final_premium_hawkes:,.0f}**
+        *   Calculation: `(${pure_premium:,.0f} + ${hawkes_risk_load:,.0f}) / (1 - 0.25)` = **${final_premium_hawkes:,.0f}** (Hawkes Technical Premium)
         
-    **Conclusion:** The Hawkes model explicitly prices in the contagious "domino effect" of cyber risk, forcing underwriters to charge a higher Risk Load to safely capitalize the portfolio.
+    **Conclusion:** The Hawkes model explicitly prices in the contagious "domino effect" of cyber risk, forcing underwriters to charge a higher Risk Load (and thus a higher Technical Premium) to safely capitalize the portfolio.
     """)
 
 
