@@ -717,7 +717,14 @@ with tab_hawkes:
             **How did we mathematically find these numbers?**
             We didn't guess or arbitrarily assign them. We proved them using the dataset:
             1.  **Extracting Timestamps:** We pulled the exact `loss_date` of every historical claim from the Maestro database, sorted them chronologically, and calculated the precise number of days between each attack.
-            2.  **The Negative Log-Likelihood Function:** We programmed the complex Hawkes likelihood equation, which calculates the exact mathematical probability of our specific sequence of attacks happening, given any random set of parameters.
+            2.  **The Negative Log-Likelihood Function:** We programmed the complex Hawkes likelihood equation, which calculates the exact mathematical probability of our specific sequence of attacks happening, given any random set of parameters. The core intensity function is:
+            """)
+            st.latex(r''' \lambda(t) = \mu + \sum_{t_i < t} \alpha e^{-\beta (t - t_i)} ''')
+            st.markdown("""
+            And the final Negative Log-Likelihood equation we minimize is:
+            """)
+            st.latex(r''' NLL = \int_0^T \lambda(t) dt - \sum_{i=1}^{N} \log \lambda(t_i) ''')
+            st.markdown("""
             3.  **L-BFGS-B Optimization:** We fed the timeline into an advanced Python optimization algorithm (`scipy.optimize`). The algorithm rapidly tested thousands of different combinations of $\mu, \alpha,$ and $\beta$, calculating the "likelihood score" for each. 
             4.  **The Result:** The algorithm converged on the exact trio of parameters below that *maximized* the probability of our dataset existing in the real world. This is called **Maximum Likelihood Estimation (MLE)**.
             """)
