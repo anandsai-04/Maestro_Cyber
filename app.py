@@ -322,7 +322,7 @@ with tab_agent:
                 Here are the statistical effects and GLM Coefficients:
                 {stats}
                 
-                Write a concise executive report for the underwriters. 
+                Write a concise executive report for the underwriters. Do NOT include formal memo headers like "Date:", "To:", "From:", or "Subject:". Just start the report directly.
                 Explicitly study and explain the effect of Vendor Control Pressure, Regulatory Findings, and Cyber Control Score on BI Loss.
                 **CRITICAL:** Explicitly use the GLM_Coefficients to explain *why* the Actuarial Pricing Engine cares about certain features over others, relating directly to the visualizations they see on the screen.
                 """
