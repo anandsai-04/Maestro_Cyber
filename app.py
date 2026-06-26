@@ -4,7 +4,7 @@ import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
 from sklearn.linear_model import PoissonRegressor, GammaRegressor
-from sklearn.metrics import mean_poisson_deviance, mean_gamma_deviance, roc_auc_score
+from sklearn.metrics import mean_poisson_deviance, mean_gamma_deviance, roc_auc_score, recall_score
 import xgboost as xgb
 import shap
 import matplotlib.pyplot as plt
@@ -161,6 +161,10 @@ xgb_sev.fit(X_sev, y_sev)
 # Calculate AUC-ROC for comparison
 glm_auc = roc_auc_score(y_freq, glm_freq.predict(X))
 xgb_auc = roc_auc_score(y_freq, xgb_freq.predict_proba(X)[:, 1])
+
+# Calculate Recall for comparison (Threshold Poisson at mean expected frequency)
+glm_recall = recall_score(y_freq, glm_freq.predict(X) > y_freq.mean())
+xgb_recall = recall_score(y_freq, xgb_freq.predict(X))
 
 # Extract Coefficients for Agent
 coef_df = pd.DataFrame({
@@ -649,6 +653,37 @@ with tab_calc:
         fig_shap = px.bar(shap_df, x='SHAP Value', y='Feature', orientation='h', 
                           title='XGBoost Marginal Contributions (SHAP for Frequency)', color='SHAP Value', color_continuous_scale='RdBu_r')
         st.plotly_chart(fig_shap, use_container_width=True)
+
+    # === ADDITIONAL COMPARISONS (RECALL & TVAR) ===
+    st.markdown("---")
+    st.markdown("### 📊 Global Model Metrics: Recall & Tail Risk")
+    st.write("Comparing the overarching predictive performance and portfolio catastrophe risk.")
+    
+    r_col1, r_col2 = st.columns(2)
+    
+    with r_col1:
+        # Recall Graph
+        recall_df = pd.DataFrame({
+            "Model": ["Poisson GLM", "XGBoost Classifier"],
+            "Recall": [glm_recall, xgb_recall]
+        })
+        fig_recall = px.bar(recall_df, x="Model", y="Recall", color="Model", title="Recall Comparison (Breach Detection)", text_auto='.2%')
+        fig_recall.update_layout(showlegend=False)
+        st.plotly_chart(fig_recall, use_container_width=True)
+        
+    with r_col2:
+        # TVaR Graph
+        losses = df[df["total_loss"] > 0]["total_loss"]
+        p95 = np.percentile(losses, 95)
+        
+        tvar_df = pd.DataFrame({
+            "Risk Metric": ["VaR 95% (Historical)", "TVaR 99% (Poisson)", "TVaR 99% (Hawkes)"],
+            "Value ($)": [p95, tvar_poisson, tvar_hawkes]
+        })
+        fig_tvar = px.bar(tvar_df, x="Risk Metric", y="Value ($)", color="Risk Metric", title="Portfolio Catastrophe Risk (VaR & TVaR)", text_auto='.3s')
+        fig_tvar.update_layout(showlegend=False)
+        st.plotly_chart(fig_tvar, use_container_width=True)
+
 # ------------------------------------------
 # TAB 4: MODEL COMPARISON & TAIL RISK
 # ------------------------------------------
