@@ -317,7 +317,7 @@ with tab_agent:
             with st.spinner("Agent is analyzing deterministic stats and GLM Coefficients..."):
                 prompt = f"""
                 You are an expert Chief Actuary reviewing a cyber insurance portfolio. 
-                Crucially, I have included the exact mathematical GLM Coefficients (Poisson Frequency and Gamma Severity) from the pricing engine.
+                Crucially, I have included the exact mathematical GLM Coefficients (Poisson Frequency and Gamma Severity) from the pricing engine. The engine also uses an XGBoost model explained via SHAP values, and a Hawkes Process to simulate TVaR Contagion Risk.
                 
                 Here are the statistical effects and GLM Coefficients:
                 {stats}
@@ -363,7 +363,8 @@ with tab_agent:
                             "HAWKES MATH: Unlike Poisson which is independent, Hawkes process is contagious. It has 3 parameters found via Maximum Likelihood Estimation on claim timestamps. Baseline (mu) is random background attacks. Excitation (alpha) is the sudden risk spike after a breach. Decay (beta) is how fast the danger fades.",
                             "HAWKES SIMULATION: We simulate Hawkes using the Branching Approximation. Immigrants (Parents) are generated using Baseline. Offspring (Children) clusters are generated using a Negative Binomial distribution based on the branching ratio (alpha/beta). Total attacks = Parents + Children.",
                             "TVaR COMPARISON: Poisson TVaR ignores systemic risk. Hawkes TVaR is mathematically superior because it creates massive right-tail variance via clustering. The difference between them is the Contagion Risk Premium.",
-                            "DISTRIBUTIONS: For frequency, Poisson beat Negative Binomial because the data lacked massive overdispersion. For severity, Lognormal beat Gamma because cyber claims have massive fat tails, but we kept Gamma as the standard regulatory baseline."
+                            "DISTRIBUTIONS: For frequency, Poisson beat Negative Binomial because the data lacked massive overdispersion. For severity, Lognormal beat Gamma because cyber claims have massive fat tails, but we kept Gamma as the standard regulatory baseline.",
+                            "XGBOOST AND SHAP: The dashboard uses an XGBoost Classifier and Regressor as a Machine Learning alternative to GLM. Because XGBoost is a black-box, it calculates local SHAP (SHapley Additive exPlanations) values to mathematically prove to underwriters exactly how much each feature contributed to a specific policy's premium."
                         ]
                         
                         # 2. Vector Search using Gemini Embeddings
