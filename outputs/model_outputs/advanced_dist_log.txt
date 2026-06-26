@@ -1,0 +1,24 @@
+==================================================
+ADVANCED CYBER DISTRIBUTION TESTING
+==================================================
+
+[1] FREQUENCY MODELING (Poisson vs. Negative Binomial)
+Poisson GLM AIC:      1352.58
+Poisson GLM Deviance: 838.58
+
+Negative Binomial (alpha=0.10) AIC:      1357.54
+Negative Binomial (alpha=0.10) Deviance: 819.33
+-> Result: Poisson performs equally well or better. (No massive overdispersion).
+
+[2] SEVERITY MODELING (Gamma vs. Lognormal)
+Gamma GLM AIC:      8181.89
+Gamma GLM Deviance: 820.11
+Lognormal GLM AIC (Adjusted): 7853.41
+
+[3] EXTREME TAIL RISK (Raw Distribution Fit)
+Gamma NLL:     3985.05
+Lognormal NLL: 3935.06
+Pareto NLL:    4084.77
+
+Summary of Fit: The lower the NLL, the better the distribution handles the extreme $45M+ outliers!
+==================================================
