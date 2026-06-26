@@ -127,8 +127,8 @@ if df is None:
 # We train the GLMs directly in Streamlit to enable 100% dynamic user-input pricing
 categorical_cols = ["sub_sector", "cloud_provider_primary"]
 numeric_cols = [
-    "exposure_size_score", "cyber_control_score", "control_gap_score", 
-    "vendor_control_pressure", "regulatory_findings_pressure", 
+    "exposure_size_score", "cyber_control_score", 
+    "vendor_control_pressure", "regulatory_findings_pressure", "high_sev_rate",
     "critical_operations_score", "payment_trading_flag", "hybrid_cloud_flag"
 ]
 
@@ -545,9 +545,9 @@ with tab_calc:
     input_dict = {
         "exposure_size_score": exp_size,
         "cyber_control_score": cyber_control_score,
-        "control_gap_score": control_gap,
         "vendor_control_pressure": vendor_pressure,
         "regulatory_findings_pressure": reg_pressure,
+        "high_sev_rate": high_sev_rate,
         "critical_operations_score": crit_ops,
         "payment_trading_flag": pay_trad,
         "hybrid_cloud_flag": hybrid_flag
