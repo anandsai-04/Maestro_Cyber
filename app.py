@@ -179,11 +179,10 @@ coef_df.to_csv("outputs/model_outputs/glm_coefficients.csv", index=False)
 # ==========================================
 # TABS
 # ==========================================
-tab_agent, tab_features, tab_calc, tab_models, tab_hawkes = st.tabs([
+tab_agent, tab_features, tab_calc, tab_hawkes = st.tabs([
     "📊 Portfolio Analytics & AI Explainer", 
     "🧬 Feature Derivation Explainer", 
     "🧮 Interactive Pricing Engine",
-    "📈 Model Comparison & Tail Risk",
     "🦠 Advanced Contagion (Hawkes)"
 ])
 
@@ -685,70 +684,7 @@ with tab_calc:
         fig_tvar.update_layout(showlegend=False)
         st.plotly_chart(fig_tvar, use_container_width=True)
 
-# ------------------------------------------
-# TAB 4: MODEL COMPARISON & TAIL RISK
-# ------------------------------------------
-with tab_models:
-    m_col1, m_col2 = st.columns(2)
-    
-    with m_col1:
 
-        with st.expander("📝 Note: Why Poisson/Gamma over Advanced Distributions & XGBoost?"):
-            st.markdown("""
-            **XGBoost & SHAP Values:**
-            We initially used XGBoost to benchmark predictive power. By extracting **SHAP values**, we found critical non-linear interactions (e.g., high `vendor_risk` is exponentially worse if the client lacks `MFA`). However, regulators require mathematical transparency. We used these XGBoost insights to engineer features, but we feed them into **Generalized Linear Models (GLMs)** for final pricing.
-            
-            **Advanced Distribution Testing:**
-            We also mathematically tested advanced distributions:
-            *   **Frequency:** We tested a **Negative Binomial (NB)** model against the **Poisson** GLM. The data showed no massive overdispersion, so Poisson actually achieved a better AIC score.
-            *   **Severity:** We tested a **Lognormal Regression** and a **Pareto** fit against the **Gamma** GLM. Because cyber claims have massive 'fat tails', Lognormal outperformed Gamma. We maintain Gamma as the standard actuarial baseline, but note Lognormal as the theoretically superior alternative for extreme scenarios.
-            """)
-        
-    with m_col2:
-        st.subheader("Value at Risk (VaR) & TVaR")
-        losses = df[df["total_loss"] > 0]["total_loss"]
-        p95 = np.percentile(losses, 95)
-        p99 = np.percentile(losses, 99)
-        tvar = np.mean(losses[losses >= p99])
-        
-        fig_tail = px.histogram(losses, nbins=50, log_y=True, 
-                                labels={"value": "Loss Amount ($)", "count": "Frequency"},
-                                color_discrete_sequence=['#FF4B4B'])
-        fig_tail.add_vline(x=p95, line_dash="dash", line_color="orange", annotation_text="VaR 95%")
-        fig_tail.add_vline(x=p99, line_dash="dash", line_color="red", annotation_text="VaR 99%")
-        st.plotly_chart(fig_tail, use_container_width=True)
-        # Attempt to load Hawkes results for comparison
-        try:
-            import json
-            with open('outputs/model_outputs/hawkes_results.json', 'r') as f:
-                h_data = json.load(f)
-            
-            st.markdown("### 99% Tail Value at Risk (TVaR) Comparison")
-            col_tvar1, col_tvar2 = st.columns(2)
-            col_tvar1.metric(label="Independent TVaR (Poisson)", value=f"${h_data['tvar_poisson']:,.0f}")
-            col_tvar2.metric(label="Contagious TVaR (Hawkes)", value=f"${h_data['tvar_hawkes']:,.0f}", delta=f"{h_data['contagion_premium']:,.0f} (Contagion Effect)", delta_color="inverse")
-            
-            st.info("""
-            **Which simulation is better?** 
-            The **Hawkes TVaR is mathematically superior** for cyber insurance. The Poisson TVaR (left) naively assumes every cyber attack is independent. The Hawkes TVaR (right) successfully simulates the "domino effect" of real-world ransomware clusters and supply-chain contagion. By capturing this compounding variance, the Hawkes simulation gives underwriters a much more accurate Risk Margin requirement.
-            """)
-        except:
-            st.markdown(f"**99% Tail Value at Risk (TVaR) [Poisson Only]:** **${tvar:,.0f}**.")
-        
-        with st.expander("📝 Note: Simulating Tail Risk & Imbalanced Data Adjustments"):
-            st.markdown("""
-            **Handling 'Low Frequency, High Severity' Data:**
-            Cyber claims are rare but devastating. If we trained a standard model, it would lazily guess '0 claims' every time. 
-            *   **Class Penalties:** We heavily penalized the models for missing a true claim, forcing the algorithms to learn the weak signals of a breach.
-            *   **Conditional Training:** We trained the severity model *only* on the tiny subset of data where a claim actually occurred.
-            
-            **Simulating 50,000 Portfolio Scenarios (Monte Carlo):**
-            To find the 99% Tail Value at Risk (TVaR), we ran a Stochastic Monte Carlo Simulation:
-            1. We created 50,000 'empty' years.
-            2. For each year, we mathematically simulated whether a claim occurs using our **Poisson Frequency probability**.
-            3. If a claim occurred, we drew a random financial loss amount from our **Gamma Severity distribution**.
-            4. We sorted all 50,000 years from best to worst. The average of the absolute worst 1% (the top 500 disaster years) becomes our TVaR—dictating exactly how much capital we must hold in reserve.
-            """)
 
 # ------------------------------------------
 # TAB 5: ADVANCED CONTAGION (HAWKES PROCESS)
