@@ -4,8 +4,10 @@ import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
 from sklearn.linear_model import PoissonRegressor, GammaRegressor
-from sklearn.ensemble import HistGradientBoostingClassifier
 from sklearn.metrics import mean_poisson_deviance, mean_gamma_deviance, roc_auc_score
+import xgboost as xgb
+import shap
+import matplotlib.pyplot as plt
 from pathlib import Path
 
 try:
@@ -148,9 +150,13 @@ glm_freq.fit(X, y_freq)
 glm_sev = GammaRegressor(alpha=0.1, max_iter=1000)
 glm_sev.fit(X_sev, y_sev)
 
-# Train XGBoost Frequency Model (For Comparison Only)
-xgb_freq = HistGradientBoostingClassifier(learning_rate=0.05, max_depth=4, random_state=42)
+# Train XGBoost Frequency Model
+xgb_freq = xgb.XGBClassifier(learning_rate=0.05, max_depth=4, random_state=42, use_label_encoder=False, eval_metric='logloss')
 xgb_freq.fit(X, y_freq)
+
+# Train XGBoost Severity Model
+xgb_sev = xgb.XGBRegressor(learning_rate=0.05, max_depth=4, random_state=42, objective='reg:gamma')
+xgb_sev.fit(X_sev, y_sev)
 
 # Calculate AUC-ROC for comparison
 glm_auc = roc_auc_score(y_freq, glm_freq.predict(X))
@@ -463,7 +469,8 @@ with tab_features:
 # ------------------------------------------
 with tab_calc:
     st.markdown("### Dynamically Price a New Policy Profile")
-    st.write("Adjust the features below. The Actuarial GLM will calculate expected frequency, severity, and premium on the fly.")
+    model_choice = st.radio("Select Core Pricing Model:", ["Actuarial GLM (Regulatory Baseline)", "Machine Learning (XGBoost)"], horizontal=True)
+    st.write("Adjust the features below. The chosen model will calculate expected frequency, severity, and premium on the fly.")
     
     col_in1, col_in2, col_in3 = st.columns(3)
     
@@ -551,8 +558,16 @@ with tab_calc:
     input_array = [input_dict.get(f, 0) for f in features_list]
     input_df = pd.DataFrame([input_array], columns=features_list)
     
-    pred_freq = glm_freq.predict(input_df)[0]
-    pred_sev = glm_sev.predict(input_df)[0]
+    if "GLM" in model_choice:
+        pred_freq = glm_freq.predict(input_df)[0]
+        pred_sev = glm_sev.predict(input_df)[0]
+        freq_model_name = "Poisson GLM"
+        sev_model_name = "Gamma GLM"
+    else:
+        pred_freq = xgb_freq.predict_proba(input_df)[0][1]
+        pred_sev = xgb_sev.predict(input_df)[0]
+        freq_model_name = "XGBoost Classifier"
+        sev_model_name = "XGBoost Regressor"
     
     pure_premium = pred_freq * pred_sev
     
@@ -597,8 +612,8 @@ with tab_calc:
     
     **How the Pure Premium is Found:**
     `Pure Premium = Expected Frequency × Expected Severity`
-    *   **Frequency:** {pred_freq:.2%} (Calculated using the **Poisson GLM**. *Note: Poisson mathematically outperformed Negative Binomial on this dataset.*)
-    *   **Severity:** ${pred_sev:,.0f} (Calculated using the **Gamma GLM**. *Note: Kept for regulatory baseline, though Lognormal handles cyber fat-tails better.*)
+    *   **Frequency:** {pred_freq:.2%} (Calculated using the **{freq_model_name}**.)
+    *   **Severity:** ${pred_sev:,.0f} (Calculated using the **{sev_model_name}**.)
     *   **Calculation:** {pred_freq:.4f} × ${pred_sev:,.0f} = **${pure_premium:,.0f}**
     
     **How the Risk Load is Found:**
@@ -615,7 +630,25 @@ with tab_calc:
     **Conclusion:** The Hawkes model explicitly prices in the contagious "domino effect" of cyber risk, forcing underwriters to charge a higher Risk Load (and thus a higher Technical Premium) to safely capitalize the portfolio.
     """)
 
-
+    # === SHAP EXPLAINABILITY ===
+    st.markdown("---")
+    st.markdown(f"### 🔍 Pricing Explainability for {model_choice}")
+    
+    if "GLM" in model_choice:
+        # GLM Contributions (Coefficient * Value)
+        contributions = input_df.iloc[0].values * glm_freq.coef_
+        contrib_df = pd.DataFrame({'Feature': features_list, 'Contribution': contributions}).sort_values('Contribution', ascending=True)
+        fig_shap = px.bar(contrib_df, x='Contribution', y='Feature', orientation='h', 
+                          title='GLM Feature Contributions (Frequency)', color='Contribution', color_continuous_scale='RdBu_r')
+        st.plotly_chart(fig_shap, use_container_width=True)
+    else:
+        # XGBoost SHAP
+        explainer = shap.TreeExplainer(xgb_freq)
+        shap_values = explainer.shap_values(input_df)
+        shap_df = pd.DataFrame({'Feature': features_list, 'SHAP Value': shap_values[0]}).sort_values('SHAP Value', ascending=True)
+        fig_shap = px.bar(shap_df, x='SHAP Value', y='Feature', orientation='h', 
+                          title='XGBoost Marginal Contributions (SHAP for Frequency)', color='SHAP Value', color_continuous_scale='RdBu_r')
+        st.plotly_chart(fig_shap, use_container_width=True)
 # ------------------------------------------
 # TAB 4: MODEL COMPARISON & TAIL RISK
 # ------------------------------------------
