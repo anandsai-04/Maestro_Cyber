@@ -725,7 +725,7 @@ with tab_hawkes:
             """)
             st.latex(r''' NLL = \int_0^T \lambda(t) dt - \sum_{i=1}^{N} \log \lambda(t_i) ''')
             st.markdown("""
-            3.  **L-BFGS-B Optimization:** We fed the timeline into an advanced Python optimization algorithm (`scipy.optimize`). The algorithm rapidly tested thousands of different combinations of $\mu, \alpha,$ and $\beta$, calculating the "likelihood score" for each. 
+            3.  **Optimization:** We optimized the equation and found the exact solution using Python's `scipy.optimize`. 
             4.  **The Result:** The algorithm converged on the exact trio of parameters below that *maximized* the probability of our dataset existing in the real world. This is called **Maximum Likelihood Estimation (MLE)**.
             """)
             st.metric(label="1. Baseline (μ)", value=f"{h_data['mu']:.4f}", delta="Random daily attacks")
